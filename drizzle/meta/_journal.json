@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1778477010381,
+      "tag": "0000_nappy_tiger_shark",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1778477178661,
+      "tag": "0001_careless_steel_serpent",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1778490000000,
+      "tag": "0002_local_email_auth",
+      "breakpoints": true
+    }
+  ]
+}
