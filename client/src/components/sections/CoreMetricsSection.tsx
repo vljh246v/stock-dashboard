@@ -101,9 +101,6 @@ function MetricRow({ metric }: { metric: FinancialMetric }) {
           </p>
           <MetricHelpPopover metric={metric} />
         </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {metric.descriptionKo}
-        </p>
       </div>
 
       <div className="flex items-center gap-2 sm:justify-end">
