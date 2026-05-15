@@ -78,13 +78,20 @@ jobs:
           OCI_DEPLOY_DIR: ${{ secrets.OCI_DEPLOY_DIR }}
         run: |
           set -euo pipefail
+          normalize_setting() {
+            printf '%s' "$1" | tr -d '[:space:]'
+          }
+          OCI_SSH_HOST="$(normalize_setting "$OCI_SSH_HOST")"
+          OCI_SSH_USER="$(normalize_setting "${OCI_SSH_USER:-opc}")"
+          OCI_SSH_PORT="$(normalize_setting "${OCI_SSH_PORT:-22}")"
+          OCI_DEPLOY_DIR="$(normalize_setting "${OCI_DEPLOY_DIR:-/home/opc/stock-dashboard}")"
           if [ -z "$OCI_SSH_HOST" ]; then
             echo "OCI_SSH_HOST secret is required" >&2
             exit 1
           fi
-          echo "OCI_SSH_USER=${OCI_SSH_USER:-opc}" >> "$GITHUB_ENV"
-          echo "OCI_SSH_PORT=${OCI_SSH_PORT:-22}" >> "$GITHUB_ENV"
-          echo "OCI_DEPLOY_DIR=${OCI_DEPLOY_DIR:-/home/opc/stock-dashboard}" >> "$GITHUB_ENV"
+          echo "OCI_SSH_USER=$OCI_SSH_USER" >> "$GITHUB_ENV"
+          echo "OCI_SSH_PORT=$OCI_SSH_PORT" >> "$GITHUB_ENV"
+          echo "OCI_DEPLOY_DIR=$OCI_DEPLOY_DIR" >> "$GITHUB_ENV"
           echo "OCI_SSH_HOST=$OCI_SSH_HOST" >> "$GITHUB_ENV"
 
       - name: Configure SSH
