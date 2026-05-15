@@ -5,6 +5,7 @@ import * as db from "./db";
 // Mock the db module
 vi.mock("./db", () => ({
   getCachedData: vi.fn(),
+  getLastGoodCachedData: vi.fn(),
   setCachedData: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ describe("getETFHoldings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(db.getCachedData).mockResolvedValue(null);
+    vi.mocked(db.getLastGoodCachedData).mockResolvedValue(null);
     vi.mocked(db.setCachedData).mockResolvedValue(undefined);
   });
 

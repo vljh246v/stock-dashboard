@@ -1,4 +1,5 @@
-import { getCachedData, setCachedData } from "./db";
+import { defaultCacheCoordinator } from "./cacheCoordinator";
+import { getCachedData, getLastGoodCachedData, setCachedData } from "./db";
 import * as cheerio from "cheerio";
 import YahooFinance from "yahoo-finance2";
 
@@ -57,49 +58,54 @@ function chartPeriod1(range: string): Date {
 }
 
 export async function getStockProfile(symbol: string) {
-  const cached = await getCachedData(symbol, PROFILE_CACHE_KEY);
-  if (cached) return cached;
-
-  try {
-    const data = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: [
-        "summaryProfile",
-        "price",
-        "summaryDetail",
-        "defaultKeyStatistics",
-        "quoteType",
-        "fundProfile",
-        "financialData",
-        "earnings",
-        "earningsHistory",
-        "earningsTrend",
-        "calendarEvents",
-      ],
-    });
-    const wrapped = quoteSummary(data);
-    await setCachedData(symbol, PROFILE_CACHE_KEY, wrapped, CACHE_TTL.profile);
-    return wrapped;
-  } catch (error) {
-    console.error(`[StockData] Failed to fetch profile for ${symbol}:`, error);
-    return invalidQuoteSummary(symbol);
-  }
+  const normalized = symbol.toUpperCase();
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:${PROFILE_CACHE_KEY}`,
+    readFresh: () => getCachedData(normalized, PROFILE_CACHE_KEY),
+    readLastGood: () => getLastGoodCachedData(normalized, PROFILE_CACHE_KEY),
+    write: value => setCachedData(normalized, PROFILE_CACHE_KEY, value, CACHE_TTL.profile),
+    produce: async () => {
+      const data = await yahooFinance.quoteSummary(normalized, {
+        modules: [
+          "summaryProfile",
+          "price",
+          "summaryDetail",
+          "defaultKeyStatistics",
+          "quoteType",
+          "fundProfile",
+          "financialData",
+          "earnings",
+          "earningsHistory",
+          "earningsTrend",
+          "calendarEvents",
+        ],
+      });
+      return quoteSummary(data);
+    },
+    failureValue: invalidQuoteSummary(normalized),
+  });
 }
 
 export async function getStockInsights(symbol: string) {
-  const cached = await getCachedData(symbol, "insights");
-  if (cached) return cached;
-
-  try {
-    const data = await yahooFinance.insights(symbol.toUpperCase(), {
-      reportsCount: 10,
-    });
-    const wrapped = financeResult(data);
-    await setCachedData(symbol, "insights", wrapped, CACHE_TTL.insights);
-    return wrapped;
-  } catch (error) {
-    console.error(`[StockData] Failed to fetch insights for ${symbol}:`, error);
-    return null;
-  }
+  const normalized = symbol.toUpperCase();
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:insights`,
+    readFresh: () => getCachedData(normalized, "insights"),
+    readLastGood: () => getLastGoodCachedData(normalized, "insights"),
+    write: value => setCachedData(normalized, "insights", value, CACHE_TTL.insights),
+    produce: async () => {
+      try {
+        const data = await yahooFinance.insights(normalized, {
+          reportsCount: 10,
+        });
+        return financeResult(data);
+      } catch (error) {
+        console.error(`[StockData] Failed to fetch insights for ${normalized}:`, error);
+        throw error;
+      }
+    },
+    failureValue: null as any,
+  });
 }
 
 export async function getStockChart(
@@ -107,45 +113,55 @@ export async function getStockChart(
   interval: string = "1d",
   range: string = "6mo"
 ) {
+  const normalized = symbol.toUpperCase();
   const cacheKey = `chart_${interval}_${range}`;
-  const cached = await getCachedData(symbol, cacheKey);
-  if (cached) return cached;
-
-  try {
-    const data = await yahooFinance.chart(symbol.toUpperCase(), {
-      period1: chartPeriod1(range),
-      interval: interval as any,
-      return: "object",
-    });
-    const wrapped = { chart: { result: [data], error: null } };
-    await setCachedData(symbol, cacheKey, wrapped, CACHE_TTL.chart);
-    return wrapped;
-  } catch (error) {
-    console.error(`[StockData] Failed to fetch chart for ${symbol}:`, error);
-    return null;
-  }
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:${cacheKey}`,
+    readFresh: () => getCachedData(normalized, cacheKey),
+    readLastGood: () => getLastGoodCachedData(normalized, cacheKey),
+    write: value => setCachedData(normalized, cacheKey, value, CACHE_TTL.chart),
+    produce: async () => {
+      try {
+        const data = await yahooFinance.chart(normalized, {
+          period1: chartPeriod1(range),
+          interval: interval as any,
+          return: "object",
+        });
+        return { chart: { result: [data], error: null } };
+      } catch (error) {
+        console.error(`[StockData] Failed to fetch chart for ${normalized}:`, error);
+        throw error;
+      }
+    },
+    failureValue: null as any,
+  });
 }
 
 export async function getStockHolders(symbol: string) {
-  const cached = await getCachedData(symbol, "holders");
-  if (cached) return cached;
-
-  try {
-    const data = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: [
-        "insiderHolders",
-        "insiderTransactions",
-        "institutionOwnership",
-        "majorHoldersBreakdown",
-      ],
-    });
-    const wrapped = quoteSummary(data);
-    await setCachedData(symbol, "holders", wrapped, CACHE_TTL.holders);
-    return wrapped;
-  } catch (error) {
-    console.error(`[StockData] Failed to fetch holders for ${symbol}:`, error);
-    return null;
-  }
+  const normalized = symbol.toUpperCase();
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:holders`,
+    readFresh: () => getCachedData(normalized, "holders"),
+    readLastGood: () => getLastGoodCachedData(normalized, "holders"),
+    write: value => setCachedData(normalized, "holders", value, CACHE_TTL.holders),
+    produce: async () => {
+      try {
+        const data = await yahooFinance.quoteSummary(normalized, {
+          modules: [
+            "insiderHolders",
+            "insiderTransactions",
+            "institutionOwnership",
+            "majorHoldersBreakdown",
+          ],
+        });
+        return quoteSummary(data);
+      } catch (error) {
+        console.error(`[StockData] Failed to fetch holders for ${normalized}:`, error);
+        throw error;
+      }
+    },
+    failureValue: null as any,
+  });
 }
 
 /**
@@ -203,9 +219,18 @@ async function fetchStockAnalysisHoldings(
 }
 
 export async function getETFHoldings(symbol: string) {
-  const cached = await getCachedData(symbol, "etfHoldings");
-  if (cached) return cached;
+  const normalized = symbol.toUpperCase();
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:etfHoldings`,
+    readFresh: () => getCachedData(normalized, "etfHoldings"),
+    readLastGood: () => getLastGoodCachedData(normalized, "etfHoldings"),
+    write: value => setCachedData(normalized, "etfHoldings", value, 1440),
+    produce: () => fetchETFHoldingsFresh(normalized),
+    failureValue: null as any,
+  });
+}
 
+async function fetchETFHoldingsFresh(symbol: string) {
   // 1. Try Vanguard API first (most accurate for Vanguard ETFs)
   try {
     const vanguardUrl = `https://investor.vanguard.com/investment-products/etfs/profile/api/${symbol.toUpperCase()}/portfolio-holding/stock`;
@@ -234,7 +259,6 @@ export async function getETFHoldings(symbol: string) {
           source: "Vanguard",
           asOfDate: data.asOfDate,
         };
-        await setCachedData(symbol, "etfHoldings", result, 1440);
         return result;
       }
     }
@@ -250,7 +274,6 @@ export async function getETFHoldings(symbol: string) {
       source: "stockanalysis.com",
       asOfDate: null,
     };
-    await setCachedData(symbol, "etfHoldings", result, 1440);
     return result;
   }
 
@@ -258,21 +281,26 @@ export async function getETFHoldings(symbol: string) {
 }
 
 export async function getStockSecFiling(symbol: string) {
-  const cached = await getCachedData(symbol, "secFiling");
-  if (cached) return cached;
-
-  try {
-    const data = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: ["secFilings"],
-    });
-    const wrapped = quoteSummary(data);
-    await setCachedData(symbol, "secFiling", wrapped, CACHE_TTL.secFiling);
-    return wrapped;
-  } catch (error) {
-    console.error(
-      `[StockData] Failed to fetch SEC filings for ${symbol}:`,
-      error
-    );
-    return null;
-  }
+  const normalized = symbol.toUpperCase();
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:secFiling`,
+    readFresh: () => getCachedData(normalized, "secFiling"),
+    readLastGood: () => getLastGoodCachedData(normalized, "secFiling"),
+    write: value => setCachedData(normalized, "secFiling", value, CACHE_TTL.secFiling),
+    produce: async () => {
+      try {
+        const data = await yahooFinance.quoteSummary(normalized, {
+          modules: ["secFilings"],
+        });
+        return quoteSummary(data);
+      } catch (error) {
+        console.error(
+          `[StockData] Failed to fetch SEC filings for ${normalized}:`,
+          error
+        );
+        throw error;
+      }
+    },
+    failureValue: null as any,
+  });
 }

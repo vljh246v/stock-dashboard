@@ -12,6 +12,7 @@ vi.mock("./_core/llm", () => ({
 vi.mock("./db", () => ({
   createOpinionSnapshotWithPendingOutcomes: vi.fn().mockResolvedValue(undefined),
   getCachedData: vi.fn().mockResolvedValue(null),
+  getLastGoodCachedData: vi.fn().mockResolvedValue(null),
   setCachedData: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -584,5 +585,54 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
     expect(portfolioPrompt).not.toContain(proseOnlyClaim);
     expect(serializedReport).toContain("검증된 가이던스 근거: 확인 불가");
     expect(serializedReport).not.toContain(proseOnlyClaim);
+  });
+
+  it("coalesces concurrent opinion generation for the same symbol", async () => {
+    const results = await Promise.all([
+      generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData),
+      generateMultiAgentOpinion("aapl", profileData, insightsData, null, chartData),
+      generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData),
+    ]);
+
+    expect(results[0]).toEqual(results[1]);
+    expect(results[1]).toEqual(results[2]);
+    expect(invokeLLM).toHaveBeenCalledTimes(8);
+    expect(db.createOpinionSnapshotWithPendingOutcomes).toHaveBeenCalledTimes(1);
+    expect(db.setCachedData).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns last-good opinion cache when a fresh refresh cannot be committed", async () => {
+    const lastGood = {
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      opinionVersion: "llm_multi_opinion_v12_metric_context",
+      agents: [],
+      workflow: {
+        source: "TradingAgents-style research report",
+        stages: [],
+      },
+      finalVerdict: {
+        signal: "보유",
+        confidence: "낮음",
+        summary: "last-good",
+        bullCase: "",
+        bearCase: "",
+        keyFactors: [],
+        dissent: "",
+      },
+      researchReport: {
+        thesis: "",
+        sections: [],
+        dataQuality: [],
+        nextChecks: [],
+      },
+      disclaimer: "cached",
+    };
+    vi.mocked(db.getLastGoodCachedData).mockResolvedValueOnce(lastGood);
+    vi.mocked(db.setCachedData).mockRejectedValueOnce(new Error("cache write failed"));
+
+    const result = await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
+
+    expect(result.finalVerdict.summary).toBe("last-good");
+    expect(db.setCachedData).toHaveBeenCalledTimes(1);
   });
 });

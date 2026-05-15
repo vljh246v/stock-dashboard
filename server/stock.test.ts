@@ -488,6 +488,41 @@ describe("stock.analysisPack", () => {
     expect(mockGetStockInsights).toHaveBeenCalledTimes(1);
     expect(mockGetStockChart).toHaveBeenCalledWith("AAPL", "1d", "6mo");
   });
+
+  it("coalesces concurrent same-symbol dashboard analysis requests", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => caller.stock.analysisPack({ symbol: "apple" }))
+    );
+
+    expect(results.every(result => result.symbol === "AAPL")).toBe(true);
+    expect(results.map(result => result.pack.metrics.generatedAt).every(
+      generatedAt => generatedAt === results[0].pack.metrics.generatedAt
+    )).toBe(true);
+    expect(mockGetStockProfile).toHaveBeenCalledTimes(1);
+    expect(mockGetStockInsights).toHaveBeenCalledTimes(1);
+    expect(mockGetStockChart).toHaveBeenCalledTimes(1);
+    expect(mockGetStockHolders).toHaveBeenCalledTimes(1);
+    expect(mockGetStockSecFiling).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares dashboard analysis across parallel analysis, summary, and opinion endpoints", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
+
+    await Promise.all([
+      caller.stock.analysisPack({ symbol: "AAPL" }),
+      caller.stock.decisionSummary({ symbol: "AAPL" }),
+      caller.stock.opinion({ symbol: "AAPL" }),
+    ]);
+
+    expect(mockGetStockProfile).toHaveBeenCalledTimes(1);
+    expect(mockGetStockInsights).toHaveBeenCalledTimes(1);
+    expect(mockGetStockChart).toHaveBeenCalledTimes(1);
+    expect(mockGetStockHolders).toHaveBeenCalledTimes(1);
+    expect(mockGetStockSecFiling).toHaveBeenCalledTimes(1);
+    expect(mockGenerateMultiAgentOpinion).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("stock.sentiment", () => {

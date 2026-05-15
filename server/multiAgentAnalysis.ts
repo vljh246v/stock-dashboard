@@ -1,6 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 import { generateAnalysisPack, type AnalysisPack } from "./analysisPack";
-import { createOpinionSnapshotWithPendingOutcomes, getCachedData, setCachedData } from "./db";
+import { defaultCacheCoordinator } from "./cacheCoordinator";
+import { createOpinionSnapshotWithPendingOutcomes, getCachedData, getLastGoodCachedData, setCachedData } from "./db";
 import { OPINION_TRACKING_VERSION, selectOpinionBaselineClose } from "./opinionTracking";
 import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
 import { isTrustedQualitySectorComparison } from "@shared/qualitySectorComparison";
@@ -940,9 +941,64 @@ export async function generateMultiAgentOpinion(
   chartData?: any,
   options?: { analysisPack?: AnalysisPack }
 ): Promise<MultiAgentOpinion> {
-  const cached = await getCachedData(symbol, "llm_multi_opinion" + CACHE_VERSION);
-  if (cached) return cached as MultiAgentOpinion;
+  const normalized = symbol.toUpperCase();
+  const cacheKey = "llm_multi_opinion" + CACHE_VERSION;
 
+  return defaultCacheCoordinator.refresh<MultiAgentOpinion>({
+    key: `${normalized}:${cacheKey}`,
+    readFresh: async () => await getCachedData(normalized, cacheKey) as MultiAgentOpinion | null,
+    readLastGood: async () => await getLastGoodCachedData(normalized, cacheKey) as MultiAgentOpinion | null,
+    write: value => setCachedData(normalized, cacheKey, value, CACHE_TTL_OPINION),
+    produce: () => generateFreshMultiAgentOpinion(
+      normalized,
+      profileData,
+      insightsData,
+      holdersData,
+      chartData,
+      options
+    ),
+    failureValue: buildUnavailableOpinion(normalized),
+    isCacheable: value => value.finalVerdict.summary !== "의견 생성이 지연되고 있습니다. 잠시 후 다시 시도해주세요.",
+    lockTimeoutSeconds: 180,
+  }) as Promise<MultiAgentOpinion>;
+}
+
+function buildUnavailableOpinion(symbol: string): MultiAgentOpinion {
+  return {
+    generatedAt: new Date().toISOString(),
+    opinionVersion: OPINION_TRACKING_VERSION,
+    agents: [],
+    workflow: {
+      source: "TradingAgents-style research report",
+      stages: [],
+    },
+    finalVerdict: {
+      signal: "보유",
+      confidence: "낮음",
+      summary: "의견 생성이 지연되고 있습니다. 잠시 후 다시 시도해주세요.",
+      bullCase: "확인 가능한 최신 의견이 아직 준비되지 않았습니다.",
+      bearCase: "생성 지연 중에는 새 투자 판단을 단정하지 않습니다.",
+      keyFactors: ["의견 생성 지연", "공식 원천 확인 필요"],
+      dissent: "새 의견 생성 완료 후 다시 확인해야 합니다.",
+    },
+    researchReport: {
+      thesis: `${symbol} 의견 생성이 지연되고 있습니다.`,
+      sections: [],
+      dataQuality: ["공식 원천 확인 필요"],
+      nextChecks: ["잠시 후 다시 조회"],
+    },
+    disclaimer: "본 분석은 공개 데이터를 바탕으로 자동 생성한 참고 정보이며, 실제 투자 결정의 근거로 사용해서는 안 됩니다. 투자에 따른 손실은 전적으로 투자자 본인에게 있습니다.",
+  };
+}
+
+async function generateFreshMultiAgentOpinion(
+  symbol: string,
+  profileData: any,
+  insightsData: any,
+  holdersData: any,
+  chartData?: any,
+  options?: { analysisPack?: AnalysisPack }
+): Promise<MultiAgentOpinion> {
   const opinionCreatedAt = new Date();
   const data = unwrapData(profileData, insightsData, chartData);
   const analysisPack = options?.analysisPack || generateAnalysisPack({
@@ -982,7 +1038,6 @@ export async function generateMultiAgentOpinion(
   };
 
   await recordOpinionSnapshot(symbol, opinionCreatedAt, chartData, opinion, analysisPack);
-  await setCachedData(symbol, "llm_multi_opinion" + CACHE_VERSION, opinion, CACHE_TTL_OPINION);
   return opinion;
 }
 

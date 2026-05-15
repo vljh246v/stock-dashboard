@@ -11,6 +11,7 @@ vi.mock("./_core/llm", () => ({
 // Mock DB cache to always miss
 vi.mock("./db", () => ({
   getCachedData: vi.fn().mockResolvedValue(null),
+  getLastGoodCachedData: vi.fn().mockResolvedValue(null),
   setCachedData: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -178,6 +179,51 @@ describe("generateSentimentAnalysis - insights data handling", () => {
     expect(result).toBeDefined();
     expect(result.noData).toBe(true);
   });
+
+  it("coalesces concurrent sentiment generation for the same symbol", async () => {
+    const insightsData = {
+      finance: {
+        result: {
+          sigDevs: [
+            { headline: "Apple announces new AI features", date: "2026-05-01" },
+          ],
+          reports: [],
+        },
+      },
+    };
+
+    const [first, second, third] = await Promise.all([
+      generateSentimentAnalysis("AAPL", insightsData),
+      generateSentimentAnalysis("aapl", insightsData),
+      generateSentimentAnalysis("AAPL", insightsData),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(second).toEqual(third);
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns last-good sentiment cache when LLM generation fails", async () => {
+    const lastGood = {
+      overallSentiment: "중립",
+      sentimentScore: 50,
+      newsAnalysis: [],
+      marketImpact: "cached",
+    };
+    vi.mocked(db.getLastGoodCachedData).mockResolvedValueOnce(lastGood);
+    vi.mocked(invokeLLM).mockRejectedValueOnce(new Error("llm down"));
+
+    const result = await generateSentimentAnalysis("AAPL", {
+      finance: {
+        result: {
+          sigDevs: [{ headline: "Apple news", date: "2026-05-01" }],
+          reports: [],
+        },
+      },
+    });
+
+    expect(result).toEqual(lastGood);
+  });
 });
 
 describe("translateBusinessSummary", () => {
@@ -234,5 +280,55 @@ describe("translateBusinessSummary", () => {
 
     expect(result).toBe("애플은 아이폰, 맥, 아이패드를 설계하고 제조합니다.");
     expect(invokeLLM).not.toHaveBeenCalled();
+  });
+
+  it("coalesces concurrent business summary translations", async () => {
+    const [first, second, third] = await Promise.all([
+      translateBusinessSummary("AAPL", "Apple designs iPhone."),
+      translateBusinessSummary("aapl", "Apple designs iPhone."),
+      translateBusinessSummary("AAPL", "Apple designs iPhone."),
+    ]);
+
+    expect(first).toBe("애플은 아이폰, 맥, 아이패드를 설계하고 제조합니다.");
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("translateGuidanceData", () => {
+  beforeEach(() => {
+    capturedMessages = [];
+    vi.clearAllMocks();
+    vi.mocked(db.getCachedData).mockResolvedValue(null);
+    vi.mocked(db.getLastGoodCachedData).mockResolvedValue(null);
+    vi.mocked(db.setCachedData).mockResolvedValue(undefined);
+    vi.mocked(invokeLLM).mockResolvedValue({
+      choices: [{
+        message: { content: "강세 요약\n약세 요약\n실적 제목" },
+      }],
+    } as any);
+  });
+
+  it("coalesces concurrent guidance translations", async () => {
+    let resolveLlm!: (value: unknown) => void;
+    vi.mocked(invokeLLM).mockReturnValueOnce(new Promise(resolve => {
+      resolveLlm = resolve;
+    }) as any);
+
+    const firstPromise = (await import("./llmAnalysis")).translateGuidanceData("AAPL", ["bull"], ["bear"], ["earnings"]);
+    const secondPromise = (await import("./llmAnalysis")).translateGuidanceData("aapl", ["bull"], ["bear"], ["earnings"]);
+
+    resolveLlm({
+      choices: [{
+        message: { content: "강세 요약\n약세 요약\n실적 제목" },
+      }],
+    });
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    expect(first).toEqual(second);
+    expect(first.bullPointsKo).toEqual(["강세 요약"]);
+    expect(invokeLLM).toHaveBeenCalledTimes(1);
   });
 });

@@ -137,6 +137,24 @@ async function buildDashboardAnalysis(symbol: string) {
   };
 }
 
+const dashboardAnalysisInFlight = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof buildDashboardAnalysis>>>
+>();
+
+async function getDashboardAnalysis(symbol: string) {
+  const existing = dashboardAnalysisInFlight.get(symbol);
+  if (existing) return existing;
+
+  const pending = buildDashboardAnalysis(symbol);
+  dashboardAnalysisInFlight.set(symbol, pending);
+  try {
+    return await pending;
+  } finally {
+    dashboardAnalysisInFlight.delete(symbol);
+  }
+}
+
 async function buildOpinionTracking(symbol: string) {
   const records = await listRecentOpinionTracking(symbol, 1200, addMonths(new Date(), -4));
   const hasResolvableOutcome = records.some(record =>
@@ -428,7 +446,7 @@ export const appRouter = router({
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const symbol = normalizeStockSymbol(input.symbol);
-        const analysis = await buildDashboardAnalysis(symbol);
+        const analysis = await getDashboardAnalysis(symbol);
         return generateMultiAgentOpinion(
           symbol,
           analysis.raw.profile,
@@ -449,14 +467,14 @@ export const appRouter = router({
     analysisPack: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
-        return buildDashboardAnalysis(normalizeStockSymbol(input.symbol));
+        return getDashboardAnalysis(normalizeStockSymbol(input.symbol));
       }),
 
     // 초보자용 조건부 판단 요약
     decisionSummary: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
-        const analysis = await buildDashboardAnalysis(
+        const analysis = await getDashboardAnalysis(
           normalizeStockSymbol(input.symbol)
         );
         return analysis.decisionSummary;

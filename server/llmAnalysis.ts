@@ -1,5 +1,6 @@
 import { invokeLLM } from "./_core/llm";
-import { getCachedData, setCachedData } from "./db";
+import { defaultCacheCoordinator } from "./cacheCoordinator";
+import { getCachedData, getLastGoodCachedData, setCachedData } from "./db";
 
 const CACHE_TTL_OPINION = 120; // 2 hours
 const CACHE_TTL_SENTIMENT = 60; // 1 hour
@@ -40,8 +41,8 @@ export async function generateSentimentAnalysis(
   symbol: string,
   insightsData: any
 ) {
-  const cached = await getCachedData(symbol, "llm_sentiment" + CACHE_VERSION);
-  if (cached) return cached;
+  const normalized = symbol.toUpperCase();
+  const cacheKey = "llm_sentiment" + CACHE_VERSION;
 
   // Unwrap insights data from finance.result wrapper
   const insights = insightsData?.finance?.result || insightsData;
@@ -49,7 +50,7 @@ export async function generateSentimentAnalysis(
   const reports = insights?.reports || [];
 
   // reports 중 해당 종목 티커가 포함된 것만 필터링하여 종목별 고유성 확보
-  const symbolUpper = symbol.toUpperCase();
+  const symbolUpper = normalized;
   const relevantReports = reports.filter((r: any) => {
     const tickers: string[] = r.tickers || [];
     // 티커 목록이 없거나 해당 종목이 포함된 경우만 사용
@@ -94,58 +95,68 @@ ${newsItems.map((item: string, i: number) => `${i + 1}. ${item}`).join("\n")}
   "marketImpact": "전체 시장 영향 요약 (2-3문장, 한글)"
 }`;
 
-  try {
-    const result = await invokeLLM({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "sentiment_analysis",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              overallSentiment: { type: "string", description: "전체 시장 심리" },
-              sentimentScore: { type: "number", description: "시장 심리 점수 0-100" },
-              newsAnalysis: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    headline: { type: "string" },
-                    sentiment: { type: "string" },
-                    impact: { type: "string" },
-                  },
-                  required: ["headline", "sentiment", "impact"],
-                  additionalProperties: false,
-                },
-              },
-              marketImpact: { type: "string", description: "시장 영향 요약" },
-            },
-            required: ["overallSentiment", "sentimentScore", "newsAnalysis", "marketImpact"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
+  const failureValue = {
+    error: true,
+    overallSentiment: "",
+    sentimentScore: null,
+    newsAnalysis: [],
+    marketImpact: "뉴스 심리 분석을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.",
+  };
 
-    const content = result.choices[0]?.message?.content;
-    const parsed = typeof content === "string" ? JSON.parse(content) : content;
-    await setCachedData(symbol, "llm_sentiment" + CACHE_VERSION, parsed, CACHE_TTL_SENTIMENT);
-    return parsed;
-  } catch (error) {
-    console.error("[LLM] Sentiment analysis failed:", error);
-    return {
-      error: true,
-      overallSentiment: "",
-      sentimentScore: null,
-      newsAnalysis: [],
-      marketImpact: "뉴스 심리 분석을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.",
-    };
-  }
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:${cacheKey}`,
+    readFresh: () => getCachedData(normalized, cacheKey),
+    readLastGood: () => getLastGoodCachedData(normalized, cacheKey),
+    write: value => setCachedData(normalized, cacheKey, value, CACHE_TTL_SENTIMENT),
+    produce: async () => {
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "sentiment_analysis",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  overallSentiment: { type: "string", description: "전체 시장 심리" },
+                  sentimentScore: { type: "number", description: "시장 심리 점수 0-100" },
+                  newsAnalysis: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        headline: { type: "string" },
+                        sentiment: { type: "string" },
+                        impact: { type: "string" },
+                      },
+                      required: ["headline", "sentiment", "impact"],
+                      additionalProperties: false,
+                    },
+                  },
+                  marketImpact: { type: "string", description: "시장 영향 요약" },
+                },
+                required: ["overallSentiment", "sentimentScore", "newsAnalysis", "marketImpact"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = result.choices[0]?.message?.content;
+        return typeof content === "string" ? JSON.parse(content) : content;
+      } catch (error) {
+        console.error("[LLM] Sentiment analysis failed:", error);
+        throw error;
+      }
+    },
+    failureValue,
+    isCacheable: value => !(value as { error?: boolean })?.error,
+  });
 }
 
 export async function translateBusinessSummary(
@@ -153,36 +164,47 @@ export async function translateBusinessSummary(
   englishSummary: string
 ): Promise<string> {
   if (!englishSummary || englishSummary.trim() === "") return "";
+  const normalized = symbol.toUpperCase();
 
-  // Check cache first
-  const cached = await getCachedData(symbol, SUMMARY_CACHE_KEY);
-  if (cached && typeof cached === "string" && containsHangul(cached)) return cached;
-
-  try {
-    const result = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `당신은 전문 금융 번역가입니다. 영문 기업 사업 요약을 자연스럽고 정확한 한국어로 번역합니다.
+  const translate = async () => {
+    try {
+      const result = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `당신은 전문 금융 번역가입니다. 영문 기업 사업 요약을 자연스럽고 정확한 한국어로 번역합니다.
 번역 시 금융/비즈니스 용어를 정확히 사용하고, 원문의 의미를 충실히 전달하세요.
 번역문만 출력하고 다른 설명은 추가하지 마세요.`,
-        },
-        {
-          role: "user",
-          content: `다음 기업 사업 요약을 한국어로 번역해주세요:\n\n${englishSummary}`,
-        },
-      ],
-    });
-    const translated = result.choices[0]?.message?.content;
-    if (translated && typeof translated === "string" && containsHangul(translated)) {
-      await setCachedData(symbol, SUMMARY_CACHE_KEY, translated, 1440); // 24h cache
-      return translated;
+          },
+          {
+            role: "user",
+            content: `다음 기업 사업 요약을 한국어로 번역해주세요:\n\n${englishSummary}`,
+          },
+        ],
+      });
+      const translated = result.choices[0]?.message?.content;
+      return typeof translated === "string" && containsHangul(translated) ? translated : "";
+    } catch (error) {
+      console.error("[LLM] Translation failed:", error);
+      throw error;
     }
-    return "";
-  } catch (error) {
-    console.error("[LLM] Translation failed:", error);
-    return "";
-  }
+  };
+
+  return defaultCacheCoordinator.refresh<string>({
+    key: `${normalized}:${SUMMARY_CACHE_KEY}`,
+    readFresh: async () => {
+      const cached = await getCachedData(normalized, SUMMARY_CACHE_KEY);
+      return typeof cached === "string" && containsHangul(cached) ? cached : null;
+    },
+    readLastGood: async () => {
+      const cached = await getLastGoodCachedData(normalized, SUMMARY_CACHE_KEY);
+      return typeof cached === "string" && containsHangul(cached) ? cached : null;
+    },
+    write: value => setCachedData(normalized, SUMMARY_CACHE_KEY, value, 1440),
+    produce: translate,
+    failureValue: "",
+    isCacheable: value => containsHangul(value),
+  }) as Promise<string>;
 }
 
 export async function translateGuidanceData(
@@ -191,9 +213,8 @@ export async function translateGuidanceData(
   bearPoints: string[],
   earningsHeadlines: string[]
 ): Promise<{ bullPointsKo: string[]; bearPointsKo: string[]; earningsHeadlinesKo: string[] }> {
+  const normalized = symbol.toUpperCase();
   const cacheKey = "llm_guidance_ko";
-  const cached = await getCachedData(symbol, cacheKey);
-  if (cached) return cached as any;
 
   const textToTranslate: string[] = [];
   const bullCount = bullPoints.length;
@@ -206,39 +227,51 @@ export async function translateGuidanceData(
     return { bullPointsKo: [], bearPointsKo: [], earningsHeadlinesKo: [] };
   }
 
-  try {
-    const result = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `당신은 전문 금융 번역가입니다. 영문 금융 분석 텍스트를 자연스럽고 정확한 한국어로 번역합니다.
+  const fallback = { bullPointsKo: bullPoints, bearPointsKo: bearPoints, earningsHeadlinesKo: earningsHeadlines };
+
+  const translate = async () => {
+    try {
+      const result = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `당신은 전문 금융 번역가입니다. 영문 금융 분석 텍스트를 자연스럽고 정확한 한국어로 번역합니다.
 각 항목을 줄바꿈으로 구분하여 번역해주세요. 원문의 개수와 동일한 개수의 번역문을 출력하세요.
 번역문만 출력하고 다른 설명은 추가하지 마세요. 번호를 붙이지 마세요.`,
-        },
-        {
-          role: "user",
-          content: `다음 ${textToTranslate.length}개 항목을 각각 한국어로 번역해주세요. 각 번역은 줄바꿈으로 구분:\n\n${textToTranslate.join("\n---\n")}`,
-        },
-      ],
-    });
-    const content = result.choices[0]?.message?.content;
-    if (content && typeof content === "string") {
-      const lines = content.split(/\n---\n|\n/).filter((l: string) => l.trim() !== "");
-      const bullPointsKo = lines.slice(0, bullCount);
-      const bearPointsKo = lines.slice(bullCount, bullCount + bearCount);
-      const earningsHeadlinesKo = lines.slice(bullCount + bearCount, bullCount + bearCount + earningsCount);
+          },
+          {
+            role: "user",
+            content: `다음 ${textToTranslate.length}개 항목을 각각 한국어로 번역해주세요. 각 번역은 줄바꿈으로 구분:\n\n${textToTranslate.join("\n---\n")}`,
+          },
+        ],
+      });
+      const content = result.choices[0]?.message?.content;
+      if (content && typeof content === "string") {
+        const lines = content.split(/\n---\n|\n/).filter((l: string) => l.trim() !== "");
+        const bullPointsKo = lines.slice(0, bullCount);
+        const bearPointsKo = lines.slice(bullCount, bullCount + bearCount);
+        const earningsHeadlinesKo = lines.slice(bullCount + bearCount, bullCount + bearCount + earningsCount);
 
-      const result_data = {
-        bullPointsKo: bullPointsKo.length === bullCount ? bullPointsKo : bullPoints,
-        bearPointsKo: bearPointsKo.length === bearCount ? bearPointsKo : bearPoints,
-        earningsHeadlinesKo: earningsHeadlinesKo.length === earningsCount ? earningsHeadlinesKo : earningsHeadlines,
-      };
-      await setCachedData(symbol, cacheKey, result_data, 720); // 12h cache
-      return result_data;
+        return {
+          bullPointsKo: bullPointsKo.length === bullCount ? bullPointsKo : bullPoints,
+          bearPointsKo: bearPointsKo.length === bearCount ? bearPointsKo : bearPoints,
+          earningsHeadlinesKo: earningsHeadlinesKo.length === earningsCount ? earningsHeadlinesKo : earningsHeadlines,
+        };
+      }
+      return fallback;
+    } catch (error) {
+      console.error("[LLM] Guidance translation failed:", error);
+      throw error;
     }
-    return { bullPointsKo: bullPoints, bearPointsKo: bearPoints, earningsHeadlinesKo: earningsHeadlines };
-  } catch (error) {
-    console.error("[LLM] Guidance translation failed:", error);
-    return { bullPointsKo: bullPoints, bearPointsKo: bearPoints, earningsHeadlinesKo: earningsHeadlines };
-  }
+  };
+
+  return defaultCacheCoordinator.refresh({
+    key: `${normalized}:${cacheKey}`,
+    readFresh: async () => await getCachedData(normalized, cacheKey) as typeof fallback | null,
+    readLastGood: async () => await getLastGoodCachedData(normalized, cacheKey) as typeof fallback | null,
+    write: value => setCachedData(normalized, cacheKey, value, 720),
+    produce: translate,
+    failureValue: fallback,
+    isCacheable: value => value !== fallback,
+  }) as Promise<typeof fallback>;
 }

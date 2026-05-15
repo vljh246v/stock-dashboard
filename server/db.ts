@@ -353,6 +353,8 @@ export async function addToWatchlist(userId: number, symbol: string, name?: stri
       userId,
       symbol: normalizedSymbol,
       name: name || null,
+    }).onDuplicateKeyUpdate({
+      set: name ? { name } : { symbol: normalizedSymbol },
     });
 
     const result = await db.select().from(watchlist)
@@ -430,15 +432,53 @@ export async function getCachedData(symbol: string, dataType: string) {
   }
 }
 
+export async function getLastGoodCachedData(symbol: string, dataType: string) {
+  const db = await getDb();
+  const normalizedSymbol = symbol.toUpperCase();
+  if (!db) {
+    if (useLocalFallback("database not available")) {
+      const cached = localStore.cache
+        .filter(item => item.symbol === normalizedSymbol && item.dataType === dataType)
+        .sort((a, b) => b.expiresAt.getTime() - a.expiresAt.getTime())[0];
+      return cached?.data ?? null;
+    }
+    return null;
+  }
+
+  try {
+    const result = await db.select().from(stockAnalysisCache)
+      .where(
+        and(
+          eq(stockAnalysisCache.symbol, normalizedSymbol),
+          eq(stockAnalysisCache.dataType, dataType)
+        )
+      )
+      .orderBy(desc(stockAnalysisCache.expiresAt), desc(stockAnalysisCache.id))
+      .limit(1);
+
+    return result.length > 0 ? result[0].data : null;
+  } catch (error) {
+    if (useLocalFallback("get last-good cache failed", error)) {
+      return getLastGoodCachedData(normalizedSymbol, dataType);
+    }
+    throw error;
+  }
+}
+
 export async function setCachedData(symbol: string, dataType: string, data: unknown, ttlMinutes: number = 60) {
   const db = await getDb();
   const normalizedSymbol = symbol.toUpperCase();
   const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
   if (!db) {
     if (useLocalFallback("database not available")) {
-      localStore.cache = localStore.cache.filter(
-        item => !(item.symbol === normalizedSymbol && item.dataType === dataType)
+      const existing = localStore.cache.find(
+        item => item.symbol === normalizedSymbol && item.dataType === dataType
       );
+      if (existing) {
+        existing.data = data;
+        existing.expiresAt = expiresAt;
+        return;
+      }
       localStore.cache.push({
         symbol: normalizedSymbol,
         dataType,
@@ -450,19 +490,17 @@ export async function setCachedData(symbol: string, dataType: string, data: unkn
   }
 
   try {
-    // Delete old cache for this symbol+type
-    await db.delete(stockAnalysisCache).where(
-      and(
-        eq(stockAnalysisCache.symbol, normalizedSymbol),
-        eq(stockAnalysisCache.dataType, dataType)
-      )
-    );
-
     await db.insert(stockAnalysisCache).values({
       symbol: normalizedSymbol,
       dataType,
       data: data as any,
       expiresAt,
+    }).onDuplicateKeyUpdate({
+      set: {
+        data: data as any,
+        expiresAt,
+        createdAt: new Date(),
+      },
     });
   } catch (error) {
     if (useLocalFallback("set cache failed", error)) {
@@ -517,16 +555,16 @@ export async function createOpinionSnapshotWithPendingOutcomes(input: OpinionTra
   }
 
   try {
-    const existing = await findOpinionSnapshot(db, normalized);
-    if (!existing) {
-      await db.insert(opinionTrackingSnapshots).values(normalized as InsertOpinionTrackingSnapshot);
-    }
+    await db.insert(opinionTrackingSnapshots)
+      .values(normalized as InsertOpinionTrackingSnapshot)
+      .onDuplicateKeyUpdate({
+        set: { symbol: normalized.symbol },
+      });
 
-    const snapshot = existing ?? await requireOpinionSnapshot(db, normalized);
+    const snapshot = await requireOpinionSnapshot(db, normalized);
     for (const pending of createPendingOutcomes(snapshot.id, snapshot.opinionCreatedAt)) {
-      const outcome = await findOpinionOutcome(db, snapshot.id, pending.horizon);
-      if (!outcome) {
-        await db.insert(opinionTrackingOutcomes).values({
+      await db.insert(opinionTrackingOutcomes)
+        .values({
           snapshotId: snapshot.id,
           horizon: pending.horizon,
           targetDate: pending.targetDate,
@@ -536,8 +574,10 @@ export async function createOpinionSnapshotWithPendingOutcomes(input: OpinionTra
           alignment: pending.alignment,
           status: pending.status,
           resolvedAt: null,
-        } as InsertOpinionTrackingOutcome);
-      }
+        } as InsertOpinionTrackingOutcome)
+        .onDuplicateKeyUpdate({
+          set: { snapshotId: snapshot.id },
+        });
     }
 
     const outcomes = await getOpinionOutcomes(db, snapshot.id);

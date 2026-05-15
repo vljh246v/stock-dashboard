@@ -29,7 +29,9 @@ export const watchlist = mysqlTable("watchlist", {
   symbol: varchar("symbol", { length: 20 }).notNull(),
   name: varchar("name", { length: 255 }),
   addedAt: timestamp("addedAt").defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("watchlist_user_symbol_unique").on(table.userId, table.symbol),
+]);
 
 export type Watchlist = typeof watchlist.$inferSelect;
 export type InsertWatchlist = typeof watchlist.$inferInsert;
@@ -44,7 +46,9 @@ export const stockAnalysisCache = mysqlTable("stock_analysis_cache", {
   data: json("data"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
-});
+}, table => [
+  uniqueIndex("stock_analysis_cache_symbol_type_unique").on(table.symbol, table.dataType),
+]);
 
 export type StockAnalysisCache = typeof stockAnalysisCache.$inferSelect;
 export type InsertStockAnalysisCache = typeof stockAnalysisCache.$inferInsert;
