@@ -41,6 +41,7 @@ describe("auth approval gate", () => {
   });
 
   it("rejects login until the user is approved", async () => {
+    const { appRouter } = await import("./routers");
     const { registerWithEmail, loginWithEmail } = await import("./_core/auth");
 
     await registerWithEmail({
@@ -55,6 +56,14 @@ describe("auth approval gate", () => {
         password: "Testpass123!",
       })
     ).rejects.toThrow("관리자 승인 후 사용할 수 있습니다.");
+
+    const caller = appRouter.createCaller(createPublicContext());
+    await expect(
+      caller.auth.login({
+        email: "wait@example.com",
+        password: "Testpass123!",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("does not auto-approve or promote the owner email from public registration", async () => {
@@ -119,6 +128,26 @@ describe("auth approval gate", () => {
         password: "Testpass123!",
       })
     ).resolves.toMatchObject({ id: pending.id });
+  });
+
+  it("returns an unauthorized tRPC error for wrong password", async () => {
+    const { appRouter } = await import("./routers");
+    const { approveUser } = await import("./db");
+    const caller = appRouter.createCaller(createPublicContext());
+    const pending = await caller.auth.register({
+      email: "wrong-password@example.com",
+      password: "Testpass123!",
+      name: "Wrong Password",
+    });
+
+    await approveUser(pending.id);
+
+    await expect(
+      caller.auth.login({
+        email: "wrong-password@example.com",
+        password: "not-the-password",
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("rejects admin procedures for unapproved admin users", async () => {

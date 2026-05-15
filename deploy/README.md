@@ -3,7 +3,7 @@
 This repository deploys directly to an OCI VM without Docker:
 
 1. `pull_request` to `main`: install, test, typecheck, and build.
-2. `push` to `main` or manual `workflow_dispatch`: build `dist`, upload a tarball to the VM, install production dependencies with pnpm, run Drizzle migrations, switch the `current` symlink, restart `systemd`, and verify `/login` on port `3000`.
+2. `push` to `main` or manual `workflow_dispatch`: build `dist`, upload a tarball to the VM, install production dependencies with pnpm, run Drizzle migrations, switch the `current` symlink, restart `systemd`, and verify `/login` on VM-local port `3000`.
 
 The VM needs only Node.js, Corepack/pnpm, systemd, SSH access, and the existing private MySQL setup.
 
@@ -27,14 +27,14 @@ node --version
 corepack pnpm --version
 ```
 
-Open the app port in OCI security rules and the VM firewall if needed:
+Keep the app port private. Nginx should be the public entrypoint and proxy to `127.0.0.1:3000`; do not open app port `3000` to the internet.
 
 ```sh
-sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --remove-port=3000/tcp
 sudo firewall-cmd --reload
 ```
 
-Keep port `3000` free for this app. The first deployment contract requires the app to answer on `http://<server-ip>:3000/login`; binding to another port does not count as success.
+Keep port `3000` free for this app on localhost. The deployment contract requires the app to answer on `http://127.0.0.1:3000/login`; nginx handles public HTTPS traffic.
 
 The workflow creates and maintains:
 
@@ -86,4 +86,4 @@ curl --fail --show-error http://127.0.0.1:3000/login
 ls -la /home/opc/stock-dashboard/current
 ```
 
-The GitHub deploy job also checks `http://<OCI_SSH_HOST>:3000/login` from the runner. If that external check fails while the VM-local curl succeeds, check the OCI security list and the VM firewall for port `3000`. Do not open MySQL port `3306`.
+The GitHub deploy job checks `http://127.0.0.1:3000/login` from inside the VM. Public traffic should go through nginx/HTTPS, not directly to port `3000`. Do not open MySQL port `3306`.

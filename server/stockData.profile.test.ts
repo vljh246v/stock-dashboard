@@ -5,9 +5,9 @@ const { mockQuoteSummary } = vi.hoisted(() => ({
 }));
 
 vi.mock("yahoo-finance2", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    quoteSummary: mockQuoteSummary,
-  })),
+  default: class YahooFinanceMock {
+    quoteSummary = mockQuoteSummary;
+  },
 }));
 
 vi.mock("./db", () => ({

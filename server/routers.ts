@@ -1,6 +1,11 @@
-import { COOKIE_NAME } from "@shared/const";
-import { ONE_YEAR_MS } from "@shared/const";
+import {
+  ACCOUNT_PENDING_APPROVAL_MSG,
+  COOKIE_NAME,
+  INVALID_EMAIL_OR_PASSWORD_MSG,
+  ONE_YEAR_MS,
+} from "@shared/const";
 import { normalizeStockSymbol } from "@shared/stockSymbols";
+import { TRPCError } from "@trpc/server";
 import {
   createSessionToken,
   isUserApproved,
@@ -54,6 +59,25 @@ function toPublicUser(user: {
     role: user.role,
     approvedAt: user.approvedAt,
   };
+}
+
+function toLoginTrpcError(error: unknown): never {
+  if (error instanceof Error) {
+    if (error.message === INVALID_EMAIL_OR_PASSWORD_MSG) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: INVALID_EMAIL_OR_PASSWORD_MSG,
+      });
+    }
+    if (error.message === ACCOUNT_PENDING_APPROVAL_MSG) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: ACCOUNT_PENDING_APPROVAL_MSG,
+      });
+    }
+  }
+
+  throw error;
 }
 
 async function buildDashboardAnalysis(symbol: string) {
@@ -138,7 +162,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const user = await loginWithEmail(input);
+        const user = await loginWithEmail(input).catch(toLoginTrpcError);
         const sessionToken = await createSessionToken(
           { openId: user.openId, name: user.name || "" },
           { expiresInMs: ONE_YEAR_MS }
@@ -228,7 +252,7 @@ export const appRouter = router({
   // Stock Analysis APIs
   stock: router({
     // 회사 기본 정보
-    profile: publicProcedure
+    profile: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const symbol = normalizeStockSymbol(input.symbol);
@@ -259,14 +283,14 @@ export const appRouter = router({
       }),
 
     // 차트 분석 (insights + chart)
-    insights: publicProcedure
+    insights: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         return getStockInsights(normalizeStockSymbol(input.symbol));
       }),
 
     // 주가 차트 데이터
-    chart: publicProcedure
+    chart: protectedProcedure
       .input(
         z.object({
           symbol: z.string().min(1).max(20),
@@ -283,14 +307,14 @@ export const appRouter = router({
       }),
 
     // 내부자 보유 현황
-    holders: publicProcedure
+    holders: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         return getStockHolders(normalizeStockSymbol(input.symbol));
       }),
 
     // 가이던스 번역
-    guidanceTranslation: publicProcedure
+    guidanceTranslation: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const symbol = normalizeStockSymbol(input.symbol);
@@ -313,14 +337,14 @@ export const appRouter = router({
       }),
 
     // SEC 공시
-    secFiling: publicProcedure
+    secFiling: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         return getStockSecFiling(normalizeStockSymbol(input.symbol));
       }),
 
     // 멀티 에이전트 종합 투자 의견
-    opinion: publicProcedure
+    opinion: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const symbol = normalizeStockSymbol(input.symbol);
@@ -336,14 +360,14 @@ export const appRouter = router({
       }),
 
     // 공용 분석 데이터: 각 탭과 보고서가 같은 가공 결과를 공유
-    analysisPack: publicProcedure
+    analysisPack: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         return buildDashboardAnalysis(normalizeStockSymbol(input.symbol));
       }),
 
     // 초보자용 조건부 판단 요약
-    decisionSummary: publicProcedure
+    decisionSummary: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const analysis = await buildDashboardAnalysis(
@@ -353,14 +377,14 @@ export const appRouter = router({
       }),
 
     // ETF 구성 종목
-    etfHoldings: publicProcedure
+    etfHoldings: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         return getETFHoldings(normalizeStockSymbol(input.symbol));
       }),
 
     // LLM 뉴스 심리 분석
-    sentiment: publicProcedure
+    sentiment: protectedProcedure
       .input(z.object({ symbol: z.string().min(1).max(20) }))
       .query(async ({ input }) => {
         const symbol = normalizeStockSymbol(input.symbol);

@@ -1,6 +1,7 @@
 import {
   ACCOUNT_PENDING_APPROVAL_MSG,
   COOKIE_NAME,
+  INVALID_EMAIL_OR_PASSWORD_MSG,
   ONE_YEAR_MS,
 } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
@@ -166,7 +167,7 @@ export async function loginWithEmail(input: {
   const user = await db.getUserByEmail(email);
 
   if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
-    throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+    throw new Error(INVALID_EMAIL_OR_PASSWORD_MSG);
   }
   if (!isUserApproved(user)) {
     throw new Error(ACCOUNT_PENDING_APPROVAL_MSG);

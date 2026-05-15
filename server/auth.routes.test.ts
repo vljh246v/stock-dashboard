@@ -34,4 +34,19 @@ describe("auth routes", () => {
       loginMethod: "email",
     });
   });
+
+  it("returns an unauthorized tRPC error for invalid email login", async () => {
+    const caller = appRouter.createCaller({
+      user: null,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: { cookie: () => {}, clearCookie: () => {} } as unknown as TrpcContext["res"],
+    });
+
+    await expect(
+      caller.auth.login({
+        email: "missing@example.com",
+        password: "wrong-password",
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
 });

@@ -209,12 +209,3 @@ jobs:
             exit 1
           fi
           REMOTE
-
-          if ! curl --fail --show-error --silent --location \
-            --retry 5 --retry-delay 2 --retry-connrefused \
-            "http://$OCI_SSH_HOST:3000/login" >/tmp/stock-dashboard-login.html; then
-            echo "stock-dashboard did not serve /login on http://$OCI_SSH_HOST:3000" >&2
-            ssh -i ~/.ssh/oci_deploy_key -p "$OCI_SSH_PORT" "$OCI_SSH_USER@$OCI_SSH_HOST" \
-              "sudo systemctl status stock-dashboard --no-pager || true; sudo journalctl -u stock-dashboard -n 120 --no-pager || true"
-            exit 1
-          fi

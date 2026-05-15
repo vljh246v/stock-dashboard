@@ -212,8 +212,39 @@ beforeEach(() => {
 });
 
 describe("stock.profile", () => {
-  it("returns company profile data for a valid symbol", async () => {
+  it("rejects unauthenticated stock API calls before upstream/LLM work", async () => {
     const caller = appRouter.createCaller(createPublicContext());
+    const stockCalls = [
+      () => caller.stock.profile({ symbol: "AAPL" }),
+      () => caller.stock.insights({ symbol: "AAPL" }),
+      () => caller.stock.chart({ symbol: "AAPL", interval: "1d", range: "6mo" }),
+      () => caller.stock.holders({ symbol: "AAPL" }),
+      () => caller.stock.guidanceTranslation({ symbol: "AAPL" }),
+      () => caller.stock.secFiling({ symbol: "AAPL" }),
+      () => caller.stock.opinion({ symbol: "AAPL" }),
+      () => caller.stock.analysisPack({ symbol: "AAPL" }),
+      () => caller.stock.decisionSummary({ symbol: "AAPL" }),
+      () => caller.stock.etfHoldings({ symbol: "AAPL" }),
+      () => caller.stock.sentiment({ symbol: "AAPL" }),
+    ];
+
+    for (const callStockProcedure of stockCalls) {
+      await expect(callStockProcedure()).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+      });
+    }
+
+    expect(mockGetStockProfile).not.toHaveBeenCalled();
+    expect(mockGetStockInsights).not.toHaveBeenCalled();
+    expect(mockGetStockChart).not.toHaveBeenCalled();
+    expect(mockGetStockHolders).not.toHaveBeenCalled();
+    expect(mockGetStockSecFiling).not.toHaveBeenCalled();
+    expect(mockGetETFHoldings).not.toHaveBeenCalled();
+    expect(mockGenerateMultiAgentOpinion).not.toHaveBeenCalled();
+  });
+
+  it("returns company profile data for a valid symbol", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.profile({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -231,7 +262,7 @@ describe("stock.profile", () => {
     };
     mockGetStockProfile.mockResolvedValue(invalidResponse);
 
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.profile({ symbol: "APPLE" });
 
     // Should return the error data, not throw
@@ -243,7 +274,7 @@ describe("stock.profile", () => {
   it("returns null when API throws an error", async () => {
     mockGetStockProfile.mockResolvedValue(null);
 
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.profile({ symbol: "AAPL" });
 
     expect(result).toBeNull();
@@ -252,7 +283,7 @@ describe("stock.profile", () => {
 
 describe("stock.insights", () => {
   it("returns technical insights data", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.insights({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -264,7 +295,7 @@ describe("stock.insights", () => {
 
 describe("stock.chart", () => {
   it("returns chart data with timestamps and quotes", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.chart({ symbol: "AAPL", interval: "1d", range: "6mo" });
 
     expect(result).toBeDefined();
@@ -276,7 +307,7 @@ describe("stock.chart", () => {
 
 describe("stock.holders", () => {
   it("returns insider holders data", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.holders({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -288,7 +319,7 @@ describe("stock.holders", () => {
   it("returns null for invalid symbol", async () => {
     mockGetStockHolders.mockResolvedValue(null);
 
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.holders({ symbol: "INVALID" });
 
     expect(result).toBeNull();
@@ -297,7 +328,7 @@ describe("stock.holders", () => {
 
 describe("stock.secFiling", () => {
   it("returns SEC filing data", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.secFiling({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -308,7 +339,7 @@ describe("stock.secFiling", () => {
 
 describe("stock.opinion", () => {
   it("returns LLM-generated investment opinion in Korean", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.opinion({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -319,7 +350,7 @@ describe("stock.opinion", () => {
   });
 
   it("normalizes apple input before fetching opinion data", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
 
     await caller.stock.opinion({ symbol: "apple" });
 
@@ -342,7 +373,7 @@ describe("stock.opinion", () => {
 
 describe("stock.decisionSummary", () => {
   it("returns a structured beginner-safe decision summary", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.decisionSummary({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
@@ -364,7 +395,7 @@ describe("stock.decisionSummary", () => {
 
 describe("stock.analysisPack", () => {
   it("returns one shared processed data pack for dashboard tabs", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.analysisPack({ symbol: "apple" });
 
     expect(result.symbol).toBe("AAPL");
@@ -383,7 +414,7 @@ describe("stock.analysisPack", () => {
 
 describe("stock.sentiment", () => {
   it("returns LLM-generated sentiment analysis in Korean", async () => {
-    const caller = appRouter.createCaller(createPublicContext());
+    const caller = appRouter.createCaller(createAuthContext());
     const result = await caller.stock.sentiment({ symbol: "AAPL" });
 
     expect(result).toBeDefined();
