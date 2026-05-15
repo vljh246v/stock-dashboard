@@ -175,6 +175,8 @@ jobs:
              corepack enable && \
              corepack pnpm config set store-dir '$OCI_DEPLOY_DIR/shared/pnpm-store' && \
              corepack pnpm install --prod --frozen-lockfile --prefer-offline && \
+             test -s dist/index.js && \
+             test -s dist/migrate.js && \
              node dist/migrate.js && \
              ln -sfn '$OCI_DEPLOY_DIR/releases/$GITHUB_SHA' '$OCI_DEPLOY_DIR/current' && \
              if command -v getenforce >/dev/null 2>&1 && [ \"\$(getenforce)\" != \"Disabled\" ]; then sudo chcon -R -t usr_t '$OCI_DEPLOY_DIR'; fi && \
@@ -182,7 +184,7 @@ jobs:
              sudo systemctl daemon-reload && \
              sudo systemctl enable stock-dashboard && \
              sudo systemctl restart stock-dashboard && \
-             find '$OCI_DEPLOY_DIR/releases' -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +6 | xargs -r rm -rf"
+             find '$OCI_DEPLOY_DIR/releases' -mindepth 1 -maxdepth 1 -type d ! -name '$GITHUB_SHA' | sort -r | tail -n +5 | xargs -r rm -rf"
 
       - name: Verify deployment
         run: |
