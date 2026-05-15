@@ -17,53 +17,134 @@ describe("dashboard date rendering", () => {
     expect(() =>
       renderToString(
         React.createElement(FilingsSection, {
-          filings: { filings: [{ type: "10-K", title: "Annual Report", date: eventDate }] },
-          insights: { sigDevs: [{ headline: "Apple reports earnings", date: eventDate }] },
+          filings: {
+            filings: [
+              { type: "10-K", title: "Annual Report", date: eventDate },
+            ],
+          },
+          insights: {
+            sigDevs: [{ headline: "Apple reports earnings", date: eventDate }],
+          },
           isLoading: false,
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
 
     expect(() =>
       renderToString(
         React.createElement(GuidanceSection, {
           insights: {
-            sigDevs: [{ headline: "Apple beats earnings estimates", date: eventDate }],
+            sigDevs: [
+              { headline: "Apple beats earnings estimates", date: eventDate },
+            ],
             reports: [],
           },
-          translation: { bullPointsKo: [], bearPointsKo: [], earningsHeadlinesKo: [] },
+          evidence: [
+            {
+              label: "최근 EPS",
+              value: "$1.64",
+              comparison: "예상 $1.60",
+              source: "Yahoo earningsHistory",
+              asOf: eventDate,
+            },
+          ],
+          translation: {
+            bullPointsKo: [],
+            bearPointsKo: [],
+            earningsHeadlinesKo: [],
+          },
           isLoading: false,
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
 
     expect(() =>
       renderToString(
         React.createElement(FinancialValuation, {
-          insights: { reports: [{ reportTitle: "Quarterly note", provider: "Test", reportDate: eventDate }] },
+          insights: {
+            reports: [
+              {
+                reportTitle: "Quarterly note",
+                provider: "Test",
+                reportDate: eventDate,
+              },
+            ],
+          },
           isLoading: false,
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
 
     expect(() =>
       renderToString(
         React.createElement(GovernanceSection, {
-          holders: { insiderHolders: { holders: [{ name: "Insider", latestTransDate: eventDate }] } },
+          holders: {
+            insiderHolders: {
+              holders: [{ name: "Insider", latestTransDate: eventDate }],
+            },
+          },
           isLoading: false,
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
 
     expect(() =>
       renderToString(
         React.createElement(ETFSection, {
-          profileData: { fundProfile: { feesExpensesInvestment: {}, feesExpensesInvestmentCat: {} } },
+          profileData: {
+            fundProfile: {
+              feesExpensesInvestment: {},
+              feesExpensesInvestmentCat: {},
+            },
+          },
           holdings: { holdings: [], asOfDate: eventDate },
           isLoadingProfile: false,
           isLoadingHoldings: false,
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
+  });
+
+  it("renders verified guidance evidence and unavailable states", () => {
+    const evidenceHtml = renderToString(
+      React.createElement(GuidanceSection, {
+        insights: { sigDevs: [], reports: [] },
+        evidence: [
+          {
+            label: "매출",
+            value: "$391.0B",
+            comparison: "성장률 +6.1%",
+            source: "Yahoo financialData",
+            asOf: "2025-03-31",
+          },
+        ],
+        translation: {
+          bullPointsKo: [],
+          bearPointsKo: [],
+          earningsHeadlinesKo: [],
+        },
+        isLoading: false,
+      })
+    );
+
+    expect(evidenceHtml).toContain("확인된 실적 근거");
+    expect(evidenceHtml).toContain("매출");
+    expect(evidenceHtml).toContain("$391.0B");
+    expect(evidenceHtml).toContain("Yahoo financialData");
+
+    const unavailableHtml = renderToString(
+      React.createElement(GuidanceSection, {
+        insights: { sigDevs: [], reports: [] },
+        evidence: [],
+        translation: {
+          bullPointsKo: [],
+          bearPointsKo: [],
+          earningsHeadlinesKo: [],
+        },
+        isLoading: false,
+      })
+    );
+
+    expect(unavailableHtml).toContain("확인된 실적 근거 데이터가 없습니다");
   });
 });

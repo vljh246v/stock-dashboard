@@ -5,14 +5,14 @@ import YahooFinance from "yahoo-finance2";
 // Cache TTL in minutes
 const CACHE_TTL = {
   profile: 1440, // 24 hours
-  insights: 60,  // 1 hour
-  chart: 30,     // 30 minutes
+  insights: 60, // 1 hour
+  chart: 30, // 30 minutes
   holders: 1440, // 24 hours
   secFiling: 1440, // 24 hours
 };
 
 const yahooFinance = new YahooFinance();
-const PROFILE_CACHE_KEY = "profile_v2_fundProfile";
+const PROFILE_CACHE_KEY = "profile_v3_guidanceEvidence";
 
 const quoteSummary = (result: unknown) => ({
   quoteSummary: {
@@ -21,10 +21,16 @@ const quoteSummary = (result: unknown) => ({
   },
 });
 
-const invalidQuoteSummary = (symbol: string, description = "Quote not found") => ({
+const invalidQuoteSummary = (
+  symbol: string,
+  description = "Quote not found"
+) => ({
   quoteSummary: {
     result: null,
-    error: { code: "Not Found", description: `${description}: ${symbol.toUpperCase()}` },
+    error: {
+      code: "Not Found",
+      description: `${description}: ${symbol.toUpperCase()}`,
+    },
   },
 });
 
@@ -56,7 +62,17 @@ export async function getStockProfile(symbol: string) {
 
   try {
     const data = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: ["summaryProfile", "price", "quoteType", "fundProfile"],
+      modules: [
+        "summaryProfile",
+        "price",
+        "quoteType",
+        "fundProfile",
+        "financialData",
+        "earnings",
+        "earningsHistory",
+        "earningsTrend",
+        "calendarEvents",
+      ],
     });
     const wrapped = quoteSummary(data);
     await setCachedData(symbol, PROFILE_CACHE_KEY, wrapped, CACHE_TTL.profile);
@@ -84,7 +100,11 @@ export async function getStockInsights(symbol: string) {
   }
 }
 
-export async function getStockChart(symbol: string, interval: string = "1d", range: string = "6mo") {
+export async function getStockChart(
+  symbol: string,
+  interval: string = "1d",
+  range: string = "6mo"
+) {
   const cacheKey = `chart_${interval}_${range}`;
   const cached = await getCachedData(symbol, cacheKey);
   if (cached) return cached;
@@ -129,13 +149,17 @@ export async function getStockHolders(symbol: string) {
 /**
  * Fetch ETF top holdings from stockanalysis.com (supports all ETFs)
  */
-async function fetchStockAnalysisHoldings(symbol: string): Promise<any[] | null> {
+async function fetchStockAnalysisHoldings(
+  symbol: string
+): Promise<any[] | null> {
   try {
     const url = `https://stockanalysis.com/etf/${symbol.toLowerCase()}/holdings/`;
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
       },
       signal: AbortSignal.timeout(15000),
@@ -146,14 +170,14 @@ async function fetchStockAnalysisHoldings(symbol: string): Promise<any[] | null>
     const $ = cheerio.load(html);
 
     const holdings: any[] = [];
-    $('table tbody tr').each((_, row) => {
-      const cells = $(row).find('td');
+    $("table tbody tr").each((_, row) => {
+      const cells = $(row).find("td");
       if (cells.length < 4) return;
 
       const symbolText = $(cells[1]).text().trim();
       const name = $(cells[2]).text().trim();
-      const weightText = $(cells[3]).text().trim().replace('%', '');
-      const sharesText = $(cells[4])?.text().trim().replace(/,/g, '') || '';
+      const weightText = $(cells[3]).text().trim().replace("%", "");
+      const sharesText = $(cells[4])?.text().trim().replace(/,/g, "") || "";
 
       const weight = parseFloat(weightText);
       if (!name || isNaN(weight)) return;
@@ -168,7 +192,10 @@ async function fetchStockAnalysisHoldings(symbol: string): Promise<any[] | null>
 
     return holdings.length > 0 ? holdings.slice(0, 10) : null;
   } catch (e) {
-    console.error(`[StockData] stockanalysis.com fetch failed for ${symbol}:`, e);
+    console.error(
+      `[StockData] stockanalysis.com fetch failed for ${symbol}:`,
+      e
+    );
     return null;
   }
 }
@@ -181,15 +208,18 @@ export async function getETFHoldings(symbol: string) {
   try {
     const vanguardUrl = `https://investor.vanguard.com/investment-products/etfs/profile/api/${symbol.toUpperCase()}/portfolio-holding/stock`;
     const vanguardRes = await fetch(vanguardUrl, {
-      headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
       signal: AbortSignal.timeout(10000),
     });
     if (vanguardRes.ok) {
-      const data = await vanguardRes.json() as any;
+      const data = (await vanguardRes.json()) as any;
       const entities = data?.fund?.entity || [];
       if (entities.length > 0) {
         const holdings = entities
-          .sort((a: any, b: any) => parseFloat(b.percentWeight) - parseFloat(a.percentWeight))
+          .sort(
+            (a: any, b: any) =>
+              parseFloat(b.percentWeight) - parseFloat(a.percentWeight)
+          )
           .slice(0, 10)
           .map((e: any) => ({
             symbol: e.ticker,
@@ -197,7 +227,11 @@ export async function getETFHoldings(symbol: string) {
             weight: parseFloat(e.percentWeight),
             shares: null,
           }));
-        const result = { holdings, source: "Vanguard", asOfDate: data.asOfDate };
+        const result = {
+          holdings,
+          source: "Vanguard",
+          asOfDate: data.asOfDate,
+        };
         await setCachedData(symbol, "etfHoldings", result, 1440);
         return result;
       }
@@ -209,7 +243,11 @@ export async function getETFHoldings(symbol: string) {
   // 2. Fallback: stockanalysis.com (supports all ETFs)
   const saHoldings = await fetchStockAnalysisHoldings(symbol);
   if (saHoldings && saHoldings.length > 0) {
-    const result = { holdings: saHoldings, source: "stockanalysis.com", asOfDate: null };
+    const result = {
+      holdings: saHoldings,
+      source: "stockanalysis.com",
+      asOfDate: null,
+    };
     await setCachedData(symbol, "etfHoldings", result, 1440);
     return result;
   }
@@ -229,7 +267,10 @@ export async function getStockSecFiling(symbol: string) {
     await setCachedData(symbol, "secFiling", wrapped, CACHE_TTL.secFiling);
     return wrapped;
   } catch (error) {
-    console.error(`[StockData] Failed to fetch SEC filings for ${symbol}:`, error);
+    console.error(
+      `[StockData] Failed to fetch SEC filings for ${symbol}:`,
+      error
+    );
     return null;
   }
 }

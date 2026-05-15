@@ -31,7 +31,26 @@ describe("getStockProfile", () => {
     await getStockProfile("SPY");
 
     expect(mockQuoteSummary).toHaveBeenCalledWith("SPY", {
-      modules: expect.arrayContaining(["summaryProfile", "price", "quoteType", "fundProfile"]),
+      modules: expect.arrayContaining([
+        "summaryProfile",
+        "price",
+        "quoteType",
+        "fundProfile",
+      ]),
+    });
+  });
+
+  it("requests structured earnings and financial modules for verified guidance evidence", async () => {
+    await getStockProfile("AAPL");
+
+    expect(mockQuoteSummary).toHaveBeenCalledWith("AAPL", {
+      modules: expect.arrayContaining([
+        "financialData",
+        "earnings",
+        "earningsHistory",
+        "earningsTrend",
+        "calendarEvents",
+      ]),
     });
   });
 });

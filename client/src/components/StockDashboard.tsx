@@ -164,6 +164,7 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
           <TabsContent value="guidance" className="mt-4">
             <GuidanceSection
               insights={insightsData}
+              evidence={analysisPackQuery.data?.pack.guidance.evidence}
               translation={guidanceTranslationQuery.data}
               isLoading={analysisPackQuery.isLoading}
             />

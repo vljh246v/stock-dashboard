@@ -3,8 +3,12 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { upsertUser } from "../db";
 import { appRouter } from "../routers";
+import { createSessionToken } from "./auth";
 import { createContext } from "./context";
+import { getSessionCookieOptions } from "./cookies";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -31,6 +35,39 @@ async function startServer() {
   const server = createServer(app);
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
+
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.ENABLE_LOCAL_DB_FALLBACK === "1"
+  ) {
+    app.get("/api/dev-login", async (req, res, next) => {
+      try {
+        const user = {
+          openId: "email:local-dev@stockpulse.test",
+          email: "local-dev@stockpulse.test",
+          name: "Local Dev",
+          loginMethod: "email",
+          role: "admin" as const,
+          approvedAt: new Date(),
+          lastSignedIn: new Date(),
+        };
+
+        await upsertUser(user);
+        const sessionToken = await createSessionToken(
+          { openId: user.openId, name: user.name },
+          { expiresInMs: ONE_YEAR_MS }
+        );
+        res.cookie(COOKIE_NAME, sessionToken, {
+          ...getSessionCookieOptions(req),
+          maxAge: ONE_YEAR_MS,
+        });
+        res.redirect("/dashboard");
+      } catch (error) {
+        next(error);
+      }
+    });
+  }
+
   // tRPC API
   app.use(
     "/api/trpc",

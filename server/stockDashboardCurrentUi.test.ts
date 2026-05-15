@@ -18,7 +18,9 @@ describe("StockDashboard current UI contract", () => {
       "의견",
       "뉴스",
     ]) {
-      expect(stockDashboardSource).toContain(`>${label}</TabsTrigger>`);
+      expect(stockDashboardSource).toMatch(
+        new RegExp(`>\\s*${label}\\s*</TabsTrigger>`)
+      );
     }
 
     for (const retiredLabel of [
