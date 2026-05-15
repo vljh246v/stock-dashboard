@@ -53,6 +53,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local browser/test automation artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+.auth/
+storage-state*.json
+*.har
+*.trace.zip
+traces/
+screenshots/
+videos/
+
 # Runtime data
 pids
 *.pid
