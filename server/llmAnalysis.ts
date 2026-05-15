@@ -5,6 +5,36 @@ const CACHE_TTL_OPINION = 120; // 2 hours
 const CACHE_TTL_SENTIMENT = 60; // 1 hour
 // Version suffix to invalidate stale caches after data parsing fixes
 const CACHE_VERSION = "_v2";
+const SUMMARY_CACHE_KEY = "llm_summary_ko_v2";
+
+function containsHangul(value: string): boolean {
+  return /[가-힣]/.test(value);
+}
+
+function formatReportDate(value: unknown): string {
+  if (!value) return "날짜 미상";
+
+  if (typeof value === "string") {
+    return value.substring(0, 10);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+    return new Date(milliseconds).toISOString().substring(0, 10);
+  }
+
+  if (typeof value === "object") {
+    const dateLike = value as { fmt?: unknown; raw?: unknown };
+    if (typeof dateLike.fmt === "string" && dateLike.fmt.trim()) {
+      return dateLike.fmt.substring(0, 10);
+    }
+    if (typeof dateLike.raw === "number") {
+      return formatReportDate(dateLike.raw);
+    }
+  }
+
+  return "날짜 미상";
+}
 
 export async function generateSentimentAnalysis(
   symbol: string,
@@ -30,7 +60,7 @@ export async function generateSentimentAnalysis(
     ...sigDevs.map((d: any) => `[주요이벤트] ${d.headline} (${d.date || "날짜 미상"})`),
     ...relevantReports.slice(0, 8).map((r: any) => {
       const headline = r.headHtml || r.title || r.reportTitle || "제목 없음";
-      const date = r.reportDate ? r.reportDate.substring(0, 10) : "날짜 미상";
+      const date = formatReportDate(r.reportDate);
       return `[애널리스트리포트] ${headline} - ${r.provider || "N/A"} (${date})`;
     }),
   ].slice(0, 10);
@@ -45,11 +75,11 @@ export async function generateSentimentAnalysis(
     };
   }
 
-  const systemPrompt = `당신은 금융 뉴스 감성 분석 전문가입니다. 제공된 실제 뉴스/이벤트 데이터만을 기반으로 감성 분석을 수행합니다.
+  const systemPrompt = `당신은 금융 뉴스 심리 분석 전문가입니다. 제공된 실제 뉴스/이벤트 데이터만을 기반으로 시장 심리 분석을 수행합니다.
 절대 사실을 지어내거나 거짓 정보를 생성하지 마세요. 데이터가 없는 부분은 "데이터 부족"으로 명시하세요.
 모든 응답은 자연스러운 한국어로 작성하세요.`;
 
-  const userPrompt = `다음 ${symbol} 종목 관련 뉴스/이벤트를 분석하여 감성 점수를 매겨주세요.
+  const userPrompt = `다음 ${symbol} 종목 관련 뉴스/이벤트를 분석하여 시장 심리 점수를 매겨주세요.
 
 ## 뉴스/이벤트 목록:
 ${newsItems.map((item: string, i: number) => `${i + 1}. ${item}`).join("\n")}
@@ -78,8 +108,8 @@ ${newsItems.map((item: string, i: number) => `${i + 1}. ${item}`).join("\n")}
           schema: {
             type: "object",
             properties: {
-              overallSentiment: { type: "string", description: "전체 감성" },
-              sentimentScore: { type: "number", description: "감성 점수 0-100" },
+              overallSentiment: { type: "string", description: "전체 시장 심리" },
+              sentimentScore: { type: "number", description: "시장 심리 점수 0-100" },
               newsAnalysis: {
                 type: "array",
                 items: {
@@ -113,7 +143,7 @@ ${newsItems.map((item: string, i: number) => `${i + 1}. ${item}`).join("\n")}
       overallSentiment: "",
       sentimentScore: null,
       newsAnalysis: [],
-      marketImpact: "감성 분석을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.",
+      marketImpact: "뉴스 심리 분석을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.",
     };
   }
 }
@@ -125,8 +155,8 @@ export async function translateBusinessSummary(
   if (!englishSummary || englishSummary.trim() === "") return "";
 
   // Check cache first
-  const cached = await getCachedData(symbol, "llm_summary_ko");
-  if (cached && typeof cached === "string") return cached;
+  const cached = await getCachedData(symbol, SUMMARY_CACHE_KEY);
+  if (cached && typeof cached === "string" && containsHangul(cached)) return cached;
 
   try {
     const result = await invokeLLM({
@@ -144,14 +174,14 @@ export async function translateBusinessSummary(
       ],
     });
     const translated = result.choices[0]?.message?.content;
-    if (translated && typeof translated === "string") {
-      await setCachedData(symbol, "llm_summary_ko", translated, 1440); // 24h cache
+    if (translated && typeof translated === "string" && containsHangul(translated)) {
+      await setCachedData(symbol, SUMMARY_CACHE_KEY, translated, 1440); // 24h cache
       return translated;
     }
-    return englishSummary;
+    return "";
   } catch (error) {
     console.error("[LLM] Translation failed:", error);
-    return englishSummary; // fallback to English
+    return "";
   }
 }
 

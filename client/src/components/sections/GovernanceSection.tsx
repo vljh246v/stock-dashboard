@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { formatReportDate } from "@shared/reportDates";
 import { UserCheck, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 interface Props {
@@ -23,12 +24,13 @@ export default function GovernanceSection({ holders, profile, isLoading }: Props
   const holdersData = holders?.quoteSummary?.result?.[0] || holders;
   const insiderHolders = holdersData?.insiderHolders?.holders || [];
   const officers = profile?.summaryProfile?.companyOfficers || [];
+  const displayDate = (value: unknown) => formatReportDate(value) || "N/A";
 
   if (insiderHolders.length === 0) {
     return (
       <Card className="bg-card border-border">
         <CardContent className="p-6 text-center text-muted-foreground">
-          내부자 보유 정보를 불러올 수 없습니다.
+          내부자 보유 정보를 불러오지 못했습니다.
         </CardContent>
       </Card>
     );
@@ -43,7 +45,7 @@ export default function GovernanceSection({ holders, profile, isLoading }: Props
       return <Badge variant="secondary" className="bg-stock-down text-stock-down text-xs">매도</Badge>;
     }
     if (d.includes("option") || d.includes("exercise")) {
-      return <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">옵션행사</Badge>;
+      return <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">옵션 행사</Badge>;
     }
     return <Badge variant="secondary" className="text-xs">{desc || "N/A"}</Badge>;
   };
@@ -82,7 +84,7 @@ export default function GovernanceSection({ holders, profile, isLoading }: Props
                       {getTransactionBadge(holder.transactionDescription)}
                     </td>
                     <td className="py-2.5 px-3 text-xs text-muted-foreground">
-                      {holder.latestTransDate?.fmt || "N/A"}
+                      {displayDate(holder.latestTransDate)}
                     </td>
                   </tr>
                 ))}
@@ -96,7 +98,7 @@ export default function GovernanceSection({ holders, profile, isLoading }: Props
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">총 내부자 수</p>
+            <p className="text-xs text-muted-foreground">확인된 내부자</p>
             <p className="text-2xl font-bold mt-1">{insiderHolders.length}</p>
           </CardContent>
         </Card>

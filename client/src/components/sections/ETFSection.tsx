@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { formatReportDate } from "@shared/reportDates";
 import { Building2, Percent, BarChart3, Calendar, TrendingUp, Info } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -24,27 +25,61 @@ const CHART_COLORS = [
   "oklch(0.60 0.16 20)",
 ];
 
+function numericValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value && typeof value === "object") {
+    const raw = (value as { raw?: unknown }).raw;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  }
+  return null;
+}
+
+function fmtValue(value: unknown): string | null {
+  if (value && typeof value === "object") {
+    const fmt = (value as { fmt?: unknown }).fmt;
+    if (typeof fmt === "string" && fmt.trim()) return fmt;
+  }
+  return null;
+}
+
+function formatPercentField(value: unknown) {
+  const formatted = fmtValue(value);
+  if (formatted) return formatted;
+
+  const raw = numericValue(value);
+  if (raw === null) return null;
+  const percent = raw <= 1 ? raw * 100 : raw;
+  return `${percent.toFixed(2)}%`;
+}
+
+function formatNetAssetsField(value: unknown) {
+  const formatted = fmtValue(value);
+  if (formatted) return formatted;
+
+  const raw = numericValue(value);
+  if (!raw) return null;
+  const dollars = raw * 1_000_000;
+  if (dollars >= 1_000_000_000_000) return `$${(dollars / 1_000_000_000_000).toFixed(1)}T`;
+  if (dollars >= 1_000_000_000) return `$${(dollars / 1_000_000_000).toFixed(1)}B`;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  return `$${dollars.toFixed(0)}`;
+}
+
 export default function ETFSection({ profileData, holdings, isLoadingProfile, isLoadingHoldings }: ETFSectionProps) {
   const fundProfile = profileData?.fundProfile || {};
   const fees = fundProfile.feesExpensesInvestment || {};
   const feesCategory = fundProfile.feesExpensesInvestmentCat || {};
 
-  const expenseRatio = fees.annualReportExpenseRatio?.fmt;
-  const expenseRatioRaw = fees.annualReportExpenseRatio?.raw;
-  const categoryExpenseRatio = feesCategory.annualReportExpenseRatio?.fmt;
+  const expenseRatio = formatPercentField(fees.annualReportExpenseRatio);
+  const categoryExpenseRatio = formatPercentField(feesCategory.annualReportExpenseRatio);
   const totalNetAssets = fees.totalNetAssets;
-  const turnover = fees.annualHoldingsTurnover?.fmt;
+  const turnover = formatPercentField(fees.annualHoldingsTurnover);
+  const expenseRatioRaw = numericValue(fees.annualReportExpenseRatio);
+  const categoryExpenseRatioRaw = numericValue(feesCategory.annualReportExpenseRatio);
   const family = fundProfile.family;
   const categoryName = fundProfile.categoryName;
   const legalType = fundProfile.legalType;
-
-  // 순자산 포맷
-  const formatNetAssets = (raw: number) => {
-    if (!raw) return "N/A";
-    if (raw >= 1_000_000) return `$${(raw / 1_000_000).toFixed(1)}T`;
-    if (raw >= 1_000) return `$${(raw / 1_000).toFixed(1)}B`;
-    return `$${raw.toFixed(1)}M`;
-  };
+  const netAssets = formatNetAssetsField(totalNetAssets);
 
   // 파이 차트용 데이터 (상위 10개 + 기타)
   const holdingsList: Array<{ symbol: string; name: string; weight: number; marketValue: number }> =
@@ -106,9 +141,9 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
           <CardContent className="p-4 flex items-start gap-3">
             <BarChart3 className="h-5 w-5 text-chart-1 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs text-muted-foreground">순자산 (AUM)</p>
+              <p className="text-xs text-muted-foreground">순자산</p>
               <p className="text-sm font-mono font-semibold">
-                {totalNetAssets?.raw ? formatNetAssets(totalNetAssets.raw * 1_000_000) : "N/A"}
+                {netAssets || "N/A"}
               </p>
               {categoryName && (
                 <Badge variant="secondary" className="text-xs mt-1">{categoryName}</Badge>
@@ -124,7 +159,7 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
             <div>
               <p className="text-xs text-muted-foreground">연간 회전율</p>
               <p className="text-lg font-mono font-semibold">{turnover || "N/A"}</p>
-              <p className="text-xs text-muted-foreground">낮을수록 패시브형</p>
+              <p className="text-xs text-muted-foreground">낮을수록 거래가 적습니다</p>
             </div>
           </CardContent>
         </Card>
@@ -138,7 +173,7 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
             {holdings?.asOfDate && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
-                <span>기준일: {new Date(holdings.asOfDate).toLocaleDateString("ko-KR")}</span>
+                <span>기준일: {formatReportDate(holdings.asOfDate) || "날짜 미상"}</span>
               </div>
             )}
           </div>
@@ -152,10 +187,10 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
               <Info className="h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                이 ETF의 구성 종목 데이터를 가져올 수 없습니다.
+                이 ETF의 구성 종목을 불러오지 못했습니다.
               </p>
               <p className="text-xs text-muted-foreground">
-                현재 Vanguard ETF(VOO, VTI, VEA 등)만 지원됩니다.
+                운용사나 공개 데이터가 구성 종목을 제공하지 않으면 일부 정보만 표시됩니다.
               </p>
             </div>
           ) : (
@@ -253,7 +288,7 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
                   </PieChart>
                 </ResponsiveContainer>
                 <p className="text-xs text-muted-foreground text-center -mt-2">
-                  비중 분포 (상위 10개 + 기타)
+                  상위 10개와 기타 비중
                 </p>
               </div>
             </div>
@@ -265,7 +300,7 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
       {expenseRatioRaw != null && (
         <Card className="bg-card border-border">
           <CardContent className="p-4 space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">총보수율 비교</p>
+            <p className="text-xs font-medium text-muted-foreground">총보수 비교</p>
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <span className="text-xs w-32 shrink-0">이 ETF ({family})</span>
@@ -277,13 +312,13 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
                 </div>
                 <span className="text-xs font-mono w-12 text-right text-stock-up">{expenseRatio}</span>
               </div>
-              {feesCategory.annualReportExpenseRatio?.raw && (
+              {categoryExpenseRatioRaw != null && categoryExpenseRatio && (
                 <div className="flex items-center gap-3">
                   <span className="text-xs w-32 shrink-0">카테고리 평균</span>
                   <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full bg-muted-foreground rounded-full"
-                      style={{ width: `${Math.min(100, (feesCategory.annualReportExpenseRatio.raw / 0.01) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (categoryExpenseRatioRaw / 0.01) * 100)}%` }}
                     />
                   </div>
                   <span className="text-xs font-mono w-12 text-right">{categoryExpenseRatio}</span>
@@ -291,7 +326,7 @@ export default function ETFSection({ profileData, holdings, isLoadingProfile, is
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              * 총보수율이 낮을수록 장기 투자 시 비용 절감 효과가 큽니다.
+              총보수가 낮을수록 장기 보유 비용을 줄이는 데 유리합니다.
             </p>
           </CardContent>
         </Card>

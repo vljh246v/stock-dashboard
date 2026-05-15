@@ -12,6 +12,7 @@ const CACHE_TTL = {
 };
 
 const yahooFinance = new YahooFinance();
+const PROFILE_CACHE_KEY = "profile_v2_fundProfile";
 
 const quoteSummary = (result: unknown) => ({
   quoteSummary: {
@@ -50,15 +51,15 @@ function chartPeriod1(range: string): Date {
 }
 
 export async function getStockProfile(symbol: string) {
-  const cached = await getCachedData(symbol, "profile");
+  const cached = await getCachedData(symbol, PROFILE_CACHE_KEY);
   if (cached) return cached;
 
   try {
     const data = await yahooFinance.quoteSummary(symbol.toUpperCase(), {
-      modules: ["summaryProfile", "price", "quoteType"],
+      modules: ["summaryProfile", "price", "quoteType", "fundProfile"],
     });
     const wrapped = quoteSummary(data);
-    await setCachedData(symbol, "profile", wrapped, CACHE_TTL.profile);
+    await setCachedData(symbol, PROFILE_CACHE_KEY, wrapped, CACHE_TTL.profile);
     return wrapped;
   } catch (error) {
     console.error(`[StockData] Failed to fetch profile for ${symbol}:`, error);

@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { translateFinancialTerm } from "@shared/financialTerms";
+import { formatReportDate } from "@shared/reportDates";
 import { Star, Lightbulb, Leaf, Users, TrendingUp, DollarSign } from "lucide-react";
 
 interface Props {
@@ -52,22 +54,14 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
   };
 
   const getRatingLabel = (rating: string) => {
-    const r = rating?.toLowerCase();
-    if (r === "buy") return "매수";
-    if (r === "strong buy") return "적극 매수";
-    if (r === "outperform") return "시장 상회";
-    if (r === "sell") return "매도";
-    if (r === "strong sell") return "적극 매도";
-    if (r === "underperform") return "시장 하회";
-    if (r === "hold") return "보유";
-    return rating || "N/A";
+    return translateFinancialTerm(rating);
   };
 
   const qualityScores = [
     { label: "혁신성", key: "innovativeness", icon: <Lightbulb className="h-4 w-4" /> },
     { label: "채용 활동", key: "hiring", icon: <Users className="h-4 w-4" /> },
     { label: "지속가능성", key: "sustainability", icon: <Leaf className="h-4 w-4" /> },
-    { label: "내부자 감성", key: "insiderSentiments", icon: <TrendingUp className="h-4 w-4" /> },
+    { label: "내부자 심리", key: "insiderSentiments", icon: <TrendingUp className="h-4 w-4" /> },
     { label: "실적 보고", key: "earningsReports", icon: <DollarSign className="h-4 w-4" /> },
     { label: "배당", key: "dividends", icon: <Star className="h-4 w-4" /> },
   ].map(({ label, key, icon }) => ({
@@ -96,12 +90,12 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
                 {getRatingLabel(recommendation.rating)}
               </Badge>
               {recommendation.provider && (
-                <span className="text-xs text-muted-foreground">by {recommendation.provider}</span>
+                <span className="text-xs text-muted-foreground">출처: {recommendation.provider}</span>
               )}
             </div>
             {recommendation.targetPrice && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">목표가:</span>
+                <span className="text-xs text-muted-foreground">목표 주가</span>
                 <span className="text-lg font-mono font-semibold">${recommendation.targetPrice?.toFixed(2)}</span>
               </div>
             )}
@@ -115,19 +109,19 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground">
-                {valuation.description || "밸류에이션 정보 없음"}
+                {valuation.description ? translateFinancialTerm(valuation.description) : "밸류에이션 정보 없음"}
               </span>
             </div>
             {valuation.discount && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">할인율:</span>
+                <span className="text-xs text-muted-foreground">할인율</span>
                 <span className="text-sm font-medium">{valuation.discount}</span>
               </div>
             )}
             {valuation.relativeValue && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">상대 가치:</span>
-                <span className="text-sm font-medium">{valuation.relativeValue}</span>
+                <span className="text-xs text-muted-foreground">상대 가치</span>
+                <span className="text-sm font-medium">{translateFinancialTerm(valuation.relativeValue)}</span>
               </div>
             )}
             {valuation.provider && (
@@ -215,7 +209,7 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
                     <p className="text-xs text-muted-foreground">{report.provider || "N/A"}</p>
                   </div>
                   <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                    {report.reportDate || ""}
+                    {formatReportDate(report.reportDate)}
                   </span>
                 </div>
               ))}

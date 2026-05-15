@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, Users, Globe, MapPin, TrendingUp } from "lucide-react";
+import { Building2, Users, Globe, MapPin, TrendingUp, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buildKoreanCompanySummary, translateCountry, translateIndustry, translateSector } from "@/lib/stockLocalization";
 
 interface Props {
   data: any;
@@ -29,6 +30,7 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
   const profile = data?.summaryProfile;
   const fundProfile = data?.fundProfile;
   const price = data?.price;
+  const quoteType = data?.quoteType;
 
   // ETF or regular stock name: try price first, then chartMeta
   const companyName =
@@ -39,10 +41,57 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
   const isETF = !!fundProfile || chartMeta?.instrumentType === "ETF";
 
   if (!profile && !fundProfile) {
+    const assetType = quoteType?.quoteType || chartMeta?.instrumentType || "시장 지표";
+    const exchange = price?.exchangeName || quoteType?.exchange || chartMeta?.exchangeName || chartMeta?.exchange || "N/A";
+    const currency = price?.currency || chartMeta?.currency || "N/A";
+    const regularMarketPrice = price?.regularMarketPrice ?? chartMeta?.regularMarketPrice;
+
+    if (companyName || quoteType || chartMeta) {
+      return (
+        <div className="space-y-4">
+          {companyName && (
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-bold">{companyName}</h2>
+              <Badge variant="secondary" className="text-xs">{assetType}</Badge>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <InfoCard
+              icon={<Building2 className="h-4 w-4" />}
+              label="자산 유형"
+              value={assetType}
+            />
+            <InfoCard
+              icon={<Globe className="h-4 w-4" />}
+              label="거래소"
+              value={exchange}
+            />
+            <InfoCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="현재가"
+              value={formatMarketPrice(regularMarketPrice, currency)}
+            />
+            <InfoCard
+              icon={<MapPin className="h-4 w-4" />}
+              label="통화"
+              value={currency}
+            />
+          </div>
+
+          <Card className="bg-card border-border">
+            <CardContent className="p-6 text-sm text-muted-foreground leading-relaxed">
+              이 심볼은 기업 또는 펀드 상세 프로필 없이 가격과 차트 중심 데이터가 제공됩니다.
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <Card className="bg-card border-border">
         <CardContent className="p-6 text-center text-muted-foreground">
-          기업 정보를 불러올 수 없습니다.
+          기업 정보를 불러오지 못했습니다.
         </CardContent>
       </Card>
     );
@@ -56,7 +105,10 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
   const etfTurnover = fundProfile?.feesExpensesInvestment?.annualHoldingsTurnover?.fmt;
 
   const officers = profile?.companyOfficers || profile?.executiveTeam || [];
-  const businessSummary = profile?.longBusinessSummaryKo || profile?.longBusinessSummary;
+  const businessSummary = profile?.longBusinessSummaryKo || (!isETF ? buildKoreanCompanySummary(profile, companyName) : "");
+  const location = [profile?.city, translateCountry(profile?.country)]
+    .filter(value => value && value !== "N/A")
+    .join(", ");
 
   return (
     <div className="space-y-4">
@@ -101,12 +153,12 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
           <InfoCard
             icon={<Building2 className="h-4 w-4" />}
             label="업종"
-            value={profile?.industry || "N/A"}
+            value={translateIndustry(profile?.industry)}
           />
           <InfoCard
             icon={<Globe className="h-4 w-4" />}
             label="섹터"
-            value={profile?.sector || "N/A"}
+            value={translateSector(profile?.sector)}
           />
           <InfoCard
             icon={<Users className="h-4 w-4" />}
@@ -116,7 +168,7 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
           <InfoCard
             icon={<MapPin className="h-4 w-4" />}
             label="소재지"
-            value={[profile?.city, profile?.country].filter(Boolean).join(", ") || "N/A"}
+            value={location || "N/A"}
           />
         </div>
       )}
@@ -198,7 +250,7 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
       {!isETF && (profile?.website || profile?.phone || profile?.address1) && (
         <Card className="bg-card border-border">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">연락처</CardTitle>
+            <CardTitle className="text-sm font-semibold">기업 연락처</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -224,6 +276,15 @@ export default function CompanyOverview({ data, isLoading, chartMeta }: Props) {
       )}
     </div>
   );
+}
+
+function formatMarketPrice(value: unknown, currency: string) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A";
+  return new Intl.NumberFormat("ko-KR", {
+    style: currency && currency !== "N/A" ? "currency" : "decimal",
+    currency: currency && currency !== "N/A" ? currency : undefined,
+    maximumFractionDigits: value >= 100 ? 2 : 4,
+  }).format(value);
 }
 
 function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

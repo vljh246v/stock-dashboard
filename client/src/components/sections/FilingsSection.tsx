@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { formatReportDate } from "@shared/reportDates";
 import { FileText, ExternalLink, Calendar } from "lucide-react";
 
 interface Props {
@@ -23,6 +24,7 @@ export default function FilingsSection({ filings, insights, isLoading }: Props) 
   const filingsData = filings?.quoteSummary?.result?.[0] || filings;
   const secFilings = filingsData?.secFilings?.filings || filings?.filings || [];
   const sigDevs = insights?.sigDevs || [];
+  const displayDate = (value: unknown) => formatReportDate(value) || "날짜 미상";
 
   const getFilingBadgeColor = (type: string) => {
     const t = type?.toUpperCase() || "";
@@ -45,7 +47,7 @@ export default function FilingsSection({ filings, insights, isLoading }: Props) 
         <CardContent>
           {secFilings.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              공시 정보를 불러올 수 없습니다.
+              공시 정보를 불러오지 못했습니다.
             </p>
           ) : (
             <div className="space-y-2">
@@ -60,7 +62,7 @@ export default function FilingsSection({ filings, insights, isLoading }: Props) 
                     </Badge>
                     <div className="min-w-0">
                       <p className="text-sm truncate">{filing.title || "제목 없음"}</p>
-                      <p className="text-xs text-muted-foreground">{filing.date || "날짜 미상"}</p>
+                      <p className="text-xs text-muted-foreground">{displayDate(filing.date)}</p>
                     </div>
                   </div>
                   {filing.edgarUrl && (
@@ -98,7 +100,7 @@ export default function FilingsSection({ filings, insights, isLoading }: Props) 
                     <div className="absolute -left-5 top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
                     <div>
                       <p className="text-sm">{event.headline || "이벤트 정보 없음"}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{event.date || "날짜 미상"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{displayDate(event.date)}</p>
                     </div>
                   </div>
                 ))}

@@ -1,7 +1,12 @@
-import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
+import {
+  ACCOUNT_PENDING_APPROVAL_MSG,
+  NOT_ADMIN_ERR_MSG,
+  UNAUTHED_ERR_MSG,
+} from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { isUserApproved } from "./auth";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -16,6 +21,12 @@ const requireUser = t.middleware(async opts => {
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
+  if (!isUserApproved(ctx.user)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: ACCOUNT_PENDING_APPROVAL_MSG,
+    });
+  }
 
   return next({
     ctx: {
@@ -27,7 +38,7 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = protectedProcedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 

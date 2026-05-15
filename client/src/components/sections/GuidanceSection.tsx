@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
+import { formatReportDate, reportDateSortKey } from "@shared/reportDates";
 import { TrendingUp, TrendingDown, Target, Calendar, BarChart3, FileText } from "lucide-react";
 
 interface Props {
@@ -28,6 +30,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
   const sigDevs = insights?.sigDevs || [];
   const valuation = insights?.instrumentInfo?.valuation || {};
   const companyName = upsell.companyName || insights?.symbol || "";
+  const displayDate = (value: unknown) => formatReportDate(value) || "날짜 미상";
 
   // Extract earnings-related sigDevs
   const earningsEvents = sigDevs.filter((d: any) =>
@@ -48,15 +51,13 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
 
   const bullPoints = upsell.msBullishSummary || [];
   const bearPoints = upsell.msBearishSummary || [];
-  const publishDate = upsell.msBullishBearishSummariesPublishDate
-    ? new Date(upsell.msBullishBearishSummariesPublishDate).toLocaleDateString("ko-KR")
-    : null;
+  const publishDate = formatReportDate(upsell.msBullishBearishSummariesPublishDate) || null;
 
   // recommendation.targetPrice가 없을 경우 reports에서 최신 목표주가 집계
   const reports = insights?.reports || [];
   const reportsWithTarget = reports
     .filter((r: any) => r.targetPrice != null)
-    .sort((a: any, b: any) => (b.reportDate || "").localeCompare(a.reportDate || ""));
+    .sort((a: any, b: any) => reportDateSortKey(b.reportDate).localeCompare(reportDateSortKey(a.reportDate)));
   const latestReportTarget = reportsWithTarget[0];
   // 최종 목표주가: recommendation.targetPrice 우선, 없으면 최신 리포트 targetPrice
   const targetPrice: number | null = recommendation.targetPrice ?? latestReportTarget?.targetPrice ?? null;
@@ -79,8 +80,8 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
               <p className="text-sm font-semibold">ETF / 지수 상품 안내</p>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              ETF와 지수 상품은 애널리스트 목표주가, 투자 의견, Bull/Bear 분석 등 개별 종목 전용 가이던스 데이터가 제공되지 않습니다.
-              기술적 분석 탭에서 단기/중기/장기 전망 지표를 확인하세요.
+              ETF와 지수 상품은 개별 종목처럼 목표 주가나 강세·약세 리포트가 제공되지 않는 경우가 많습니다.
+              차트 탭에서 단기·중기·장기 흐름을 확인해 주세요.
             </p>
             {hasTechnicalData && (
               <div className="grid grid-cols-3 gap-3 pt-2">
@@ -95,8 +96,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
                       data?.direction === 'Bullish' ? 'text-stock-up' :
                       data?.direction === 'Bearish' ? 'text-stock-down' : 'text-muted-foreground'
                     }`}>
-                      {data?.direction === 'Bullish' ? '강세' :
-                       data?.direction === 'Bearish' ? '약세' : data?.direction || 'N/A'}
+                      {translateFinancialTerm(data?.direction)}
                     </p>
                   </div>
                 ))}
@@ -112,7 +112,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
                 )}
                 {keyTechnicals.stopLoss && (
                   <div className="p-3 rounded-md bg-secondary/40">
-                    <p className="text-xs text-muted-foreground">손절가</p>
+                    <p className="text-xs text-muted-foreground">손절 기준</p>
                     <p className="text-sm font-mono font-semibold">${keyTechnicals.stopLoss.toFixed(2)}</p>
                   </div>
                 )}
@@ -152,10 +152,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
             <div>
               <p className="text-xs text-muted-foreground">밸류에이션 상태</p>
               <p className="text-sm font-semibold">
-                {valuation.description === "Overvalued" ? "고평가" :
-                 valuation.description === "Undervalued" ? "저평가" :
-                 valuation.description === "Near Fair Value" ? "적정가 근접" :
-                 valuation.description || "N/A"}
+                {translateFinancialTerm(valuation.description)}
               </p>
               {valuation.discount && (
                 <p className="text-xs text-muted-foreground">할인율: {valuation.discount}</p>
@@ -170,11 +167,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
             <div>
               <p className="text-xs text-muted-foreground">투자 의견</p>
               <p className="text-sm font-semibold">
-                {recommendation.rating === "BUY" ? "매수" :
-                 recommendation.rating === "SELL" ? "매도" :
-                 recommendation.rating === "HOLD" ? "보유" :
-                 recommendation.rating === "STRONG BUY" ? "적극 매수" :
-                 recommendation.rating || "N/A"}
+                {translateFinancialTerm(recommendation.rating)}
               </p>
               {recommendation.provider && (
                 <p className="text-xs text-muted-foreground">{recommendation.provider}</p>
@@ -190,7 +183,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              실적 발표 및 가이던스 이벤트
+              실적 발표와 전망 변화
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -210,9 +203,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{translation?.earningsHeadlinesKo?.[idx] || event.headline}</p>
-                    {event.date && (
-                      <p className="text-xs text-muted-foreground mt-1">{event.date}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground mt-1">{displayDate(event.date)}</p>
                   </div>
                 </div>
               ))}
@@ -221,20 +212,20 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
         </Card>
       )}
 
-      {/* Morningstar Bull/Bear Analysis */}
+      {/* Morningstar 강세/약세 분석 */}
       {(bullPoints.length > 0 || bearPoints.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isTranslating && (
             <div className="col-span-full text-center py-2">
-              <p className="text-xs text-muted-foreground animate-pulse">한국어 번역 중...</p>
+              <p className="text-xs text-muted-foreground animate-pulse">한국어로 정리하는 중...</p>
             </div>
           )}
-          {/* Bull Case */}
+          {/* 강세 시나리오 */}
           <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-stock-up" />
-                강세 요인 (Bull Case)
+                강세 요인
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -244,19 +235,19 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
                     <Badge variant="outline" className="shrink-0 mt-0.5 text-stock-up border-stock-up/30 bg-stock-up/10 text-xs px-1.5">
                       {idx + 1}
                     </Badge>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{translation?.bullPointsKo?.[idx] || point}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{translation?.bullPointsKo?.[idx] || translateFinancialText(point)}</p>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Bear Case */}
+          {/* 약세 시나리오 */}
           <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-stock-down" />
-                약세 요인 (Bear Case)
+                약세 요인
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -266,7 +257,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
                     <Badge variant="outline" className="shrink-0 mt-0.5 text-stock-down border-stock-down/30 bg-stock-down/10 text-xs px-1.5">
                       {idx + 1}
                     </Badge>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{translation?.bearPointsKo?.[idx] || point}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{translation?.bearPointsKo?.[idx] || translateFinancialText(point)}</p>
                   </div>
                 ))}
               </div>
@@ -288,7 +279,7 @@ export default function GuidanceSection({ insights, translation, isLoading }: Pr
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center text-muted-foreground">
             <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">현재 이 종목에 대한 가이던스 정보가 없습니다.</p>
+            <p className="text-sm">현재 이 종목에서 확인할 수 있는 전망 정보가 없습니다.</p>
           </CardContent>
         </Card>
       )}

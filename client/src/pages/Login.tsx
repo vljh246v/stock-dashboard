@@ -33,9 +33,14 @@ export default function Login() {
   });
 
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: async () => {
-      await refresh();
-      setLocation("/dashboard");
+    onSuccess: async user => {
+      if (user?.approvedAt) {
+        await refresh();
+        setLocation("/dashboard");
+        return;
+      }
+      toast.success("가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.");
+      setMode("login");
     },
     onError: error => toast.error(error.message),
   });
@@ -58,10 +63,12 @@ export default function Login() {
           <BarChart3 className="h-10 w-10 text-primary" />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {mode === "login" ? "로그인" : "계정 만들기"}
+              {mode === "login" ? "StockPulse 로그인" : "StockPulse 시작하기"}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              StockPulse 계정으로 대시보드를 시작하세요.
+              {mode === "login"
+                ? "관심 종목과 분석 대시보드를 이어서 확인해 주세요."
+                : "가입 신청 후 승인되면 대시보드를 사용할 수 있습니다."}
             </p>
           </div>
         </div>
@@ -106,7 +113,7 @@ export default function Login() {
 
           <Button type="submit" className="w-full" disabled={pending}>
             {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "login" ? "로그인" : "가입하기"}
+            {mode === "login" ? "로그인" : "계정 만들기"}
           </Button>
         </form>
 
@@ -116,7 +123,7 @@ export default function Login() {
           className="w-full"
           onClick={() => setMode(mode === "login" ? "register" : "login")}
         >
-          {mode === "login" ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}
+          {mode === "login" ? "처음 오셨나요? 계정 만들기" : "이미 계정이 있으신가요? 로그인"}
         </Button>
       </div>
     </div>

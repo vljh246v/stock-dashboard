@@ -8,6 +8,8 @@ const mockGetStockInsights = vi.fn();
 const mockGetStockChart = vi.fn();
 const mockGetStockHolders = vi.fn();
 const mockGetStockSecFiling = vi.fn();
+const mockGetETFHoldings = vi.fn();
+const mockGenerateMultiAgentOpinion = vi.fn();
 
 vi.mock("./stockData", () => ({
   getStockProfile: (...args: any[]) => mockGetStockProfile(...args),
@@ -15,27 +17,18 @@ vi.mock("./stockData", () => ({
   getStockChart: (...args: any[]) => mockGetStockChart(...args),
   getStockHolders: (...args: any[]) => mockGetStockHolders(...args),
   getStockSecFiling: (...args: any[]) => mockGetStockSecFiling(...args),
+  getETFHoldings: (...args: any[]) => mockGetETFHoldings(...args),
 }));
 
 // Mock the LLM analysis module
 vi.mock("./multiAgentAnalysis", () => ({
-  generateMultiAgentOpinion: vi.fn().mockResolvedValue({
-    agents: [
-      { agentName: "기술적 분석", signal: "매수", confidence: "중간", reasoning: "단기 상승 추세", keyPoints: ["기술적 강세"] },
-      { agentName: "펀더멘털 분석", signal: "보유", confidence: "중간", reasoning: "고평가 상태", keyPoints: ["밸류에이션 부담"] },
-      { agentName: "리스크 관리", signal: "보유", confidence: "중간", reasoning: "하방 리스크 존재", keyPoints: ["중국 시장 리스크"] },
-    ],
-    finalVerdict: {
-      signal: "보유",
-      confidence: "중간",
-      summary: "기술적 강세에도 불구하고 밸류에이션 부담으로 보유 권고",
-      bullCase: "강력한 생태계와 서비스 매출 성장이 긍정적입니다.",
-      bearCase: "높은 밸류에이션과 중국 시장 리스크가 존재합니다.",
-      keyFactors: ["서비스 매출 성장", "AI 투자", "밸류에이션"],
-      dissent: "기술적 분석가는 매수를 권하지만 리스크 요인이 존재합니다.",
-    },
-    disclaimer: "본 분석은 AI가 공개 데이터를 기반으로 생성한 참고 정보입니다.",
-  }),
+  generateMultiAgentOpinion: (...args: any[]) => mockGenerateMultiAgentOpinion(...args),
+}));
+
+const mockGenerateDecisionSummary = vi.fn();
+
+vi.mock("./decisionSummary", () => ({
+  generateDecisionSummary: (...args: any[]) => mockGenerateDecisionSummary(...args),
 }));
 
 vi.mock("./llmAnalysis", () => ({
@@ -84,6 +77,7 @@ function createAuthContext(): TrpcContext {
       passwordHash: null,
       loginMethod: "email",
       role: "user",
+      approvedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
@@ -181,6 +175,40 @@ beforeEach(() => {
   mockGetStockChart.mockResolvedValue(validChart);
   mockGetStockHolders.mockResolvedValue(validHolders);
   mockGetStockSecFiling.mockResolvedValue(validSecFiling);
+  mockGetETFHoldings.mockResolvedValue(null);
+  mockGenerateMultiAgentOpinion.mockResolvedValue({
+    agents: [
+      { agentName: "기술적 분석", signal: "매수", confidence: "중간", reasoning: "단기 상승 추세", keyPoints: ["기술적 강세"] },
+      { agentName: "펀더멘털 분석", signal: "보유", confidence: "중간", reasoning: "고평가 상태", keyPoints: ["밸류에이션 부담"] },
+      { agentName: "리스크 관리", signal: "보유", confidence: "중간", reasoning: "하방 리스크 존재", keyPoints: ["중국 시장 리스크"] },
+    ],
+    finalVerdict: {
+      signal: "보유",
+      confidence: "중간",
+      summary: "기술적 강세에도 불구하고 밸류에이션 부담으로 보유 권고",
+      bullCase: "강력한 생태계와 서비스 매출 성장이 긍정적입니다.",
+      bearCase: "높은 밸류에이션과 중국 시장 리스크가 존재합니다.",
+      keyFactors: ["서비스 매출 성장", "AI 투자", "밸류에이션"],
+      dissent: "기술적 분석가는 매수를 권하지만 리스크 요인이 존재합니다.",
+    },
+    disclaimer: "본 분석은 AI가 공개 데이터를 기반으로 생성한 참고 정보입니다.",
+  });
+  mockGenerateDecisionSummary.mockReturnValue({
+    symbol: "AAPL",
+    assetType: "stock",
+    state: "wait",
+    labelKo: "관망",
+    confidence: "중간",
+    headline: "관망 관점입니다. 근거를 함께 확인하세요.",
+    reasons: [
+      { category: "trend", label: "추세 중립", detail: "방향성이 강하지 않습니다." },
+      { category: "valuation", label: "밸류에이션 부담", detail: "진입 가격은 신중히 봐야 합니다." },
+      { category: "risk", label: "리스크 확인", detail: "하방 기준을 확인해야 합니다." },
+    ],
+    riskNote: "무효화 기준을 확인하세요.",
+    sources: [{ name: "Yahoo insights", status: "used" }],
+    disclaimer: "본 요약은 공개 데이터 기반 참고 정보입니다.",
+  });
 });
 
 describe("stock.profile", () => {
@@ -288,6 +316,68 @@ describe("stock.opinion", () => {
     expect((result as any).finalVerdict.signal).toBe("보유");
     expect((result as any).finalVerdict.keyFactors.length).toBeGreaterThan(0);
     expect((result as any).disclaimer).toBeDefined();
+  });
+
+  it("normalizes apple input before fetching opinion data", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+
+    await caller.stock.opinion({ symbol: "apple" });
+
+    expect(mockGetStockProfile).toHaveBeenCalledWith("AAPL");
+    expect(mockGetStockInsights).toHaveBeenCalledWith("AAPL");
+    expect(mockGetStockHolders).toHaveBeenCalledWith("AAPL");
+    expect(mockGetStockChart).toHaveBeenCalledWith("AAPL", "1d", "6mo");
+    expect(mockGenerateMultiAgentOpinion).toHaveBeenCalledWith(
+      "AAPL",
+      validProfile,
+      validInsights,
+      validHolders,
+      validChart,
+      expect.objectContaining({
+        analysisPack: expect.objectContaining({ symbol: "AAPL" }),
+      })
+    );
+  });
+});
+
+describe("stock.decisionSummary", () => {
+  it("returns a structured beginner-safe decision summary", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.stock.decisionSummary({ symbol: "AAPL" });
+
+    expect(result).toBeDefined();
+    expect((result as any).labelKo).toBe("관망");
+    expect((result as any).reasons).toHaveLength(3);
+    expect(JSON.stringify(result)).not.toContain("사세요");
+    expect(JSON.stringify(result)).not.toContain("파세요");
+    expect(mockGenerateDecisionSummary).toHaveBeenCalledWith(expect.objectContaining({
+      symbol: "AAPL",
+      profile: validProfile,
+      insights: validInsights,
+      chart: validChart,
+      holders: validHolders,
+      secFilings: validSecFiling,
+      etfHoldings: null,
+    }));
+  });
+});
+
+describe("stock.analysisPack", () => {
+  it("returns one shared processed data pack for dashboard tabs", async () => {
+    const caller = appRouter.createCaller(createPublicContext());
+    const result = await caller.stock.analysisPack({ symbol: "apple" });
+
+    expect(result.symbol).toBe("AAPL");
+    expect(result.raw.profile).toBe(validProfile);
+    expect(result.raw.insights).toBe(validInsights);
+    expect(result.raw.chart).toBe(validChart);
+    expect(result.raw.secFilings).toBe(validSecFiling);
+    expect(result.decisionSummary.labelKo).toBe("관망");
+    expect(result.pack.tabData.overview.highlights.length).toBeGreaterThan(0);
+    expect(result.pack.tabData.technical.highlights.join(" ")).toContain("추세");
+    expect(mockGetStockProfile).toHaveBeenCalledTimes(1);
+    expect(mockGetStockInsights).toHaveBeenCalledTimes(1);
+    expect(mockGetStockChart).toHaveBeenCalledWith("AAPL", "1d", "6mo");
   });
 });
 

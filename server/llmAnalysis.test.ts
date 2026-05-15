@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { invokeLLM } from "./_core/llm";
+import * as db from "./db";
 
 // Mock the LLM invocation to capture the prompt
 let capturedMessages: any[] = [];
@@ -147,6 +148,31 @@ describe("generateSentimentAnalysis - insights data handling", () => {
     expect(result.sentimentScore).toBe(72);
   });
 
+  it("formats non-string reportDate values from real Yahoo insights data", async () => {
+    const insightsData = {
+      finance: {
+        result: {
+          sigDevs: [],
+          reports: [
+            {
+              tickers: ["AAPL"],
+              headHtml: "Apple report with object date",
+              reportDate: { raw: 1714348800, fmt: "2024-04-29" },
+              provider: "Yahoo Finance",
+            },
+          ],
+        },
+      },
+    };
+
+    const result = await generateSentimentAnalysis("AAPL", insightsData);
+    const userPrompt = capturedMessages.find((m: any) => m.role === "user")?.content || "";
+
+    expect(result.sentimentScore).toBe(72);
+    expect(userPrompt).toContain("Apple report with object date");
+    expect(userPrompt).toContain("2024-04-29");
+  });
+
   it("handles null/undefined insights data without crashing", async () => {
     const result = await generateSentimentAnalysis("UNKNOWN", null);
     expect(result).toBeDefined();
@@ -158,6 +184,8 @@ describe("translateBusinessSummary", () => {
   beforeEach(() => {
     capturedMessages = [];
     vi.clearAllMocks();
+    vi.mocked(db.getCachedData).mockResolvedValue(null);
+    vi.mocked(db.setCachedData).mockResolvedValue(undefined);
     vi.mocked(invokeLLM).mockImplementation(async ({ messages }: any) => {
       capturedMessages = messages;
       return {
@@ -176,5 +204,35 @@ describe("translateBusinessSummary", () => {
   it("returns empty string for empty input", async () => {
     const result = await translateBusinessSummary("AAPL", "");
     expect(result).toBe("");
+  });
+
+  it("does not expose English fallback when translation fails", async () => {
+    vi.mocked(invokeLLM).mockRejectedValueOnce(new Error("OPENAI_API_KEY is not configured"));
+
+    const result = await translateBusinessSummary("AAPL", "Apple designs and manufactures iPhone, Mac, iPad.");
+
+    expect(result).toBe("");
+  });
+
+  it("does not accept an English-only LLM response as translated summary", async () => {
+    vi.mocked(invokeLLM).mockResolvedValueOnce({
+      choices: [{
+        message: { content: "Apple designs and manufactures iPhone, Mac, iPad." },
+      }],
+    } as any);
+
+    const result = await translateBusinessSummary("AAPL", "Apple designs and manufactures iPhone, Mac, iPad.");
+
+    expect(result).toBe("");
+    expect(db.setCachedData).not.toHaveBeenCalled();
+  });
+
+  it("uses a cached Korean summary", async () => {
+    vi.mocked(db.getCachedData).mockResolvedValueOnce("애플은 아이폰, 맥, 아이패드를 설계하고 제조합니다.");
+
+    const result = await translateBusinessSummary("AAPL", "Apple designs and manufactures iPhone, Mac, iPad.");
+
+    expect(result).toBe("애플은 아이폰, 맥, 아이패드를 설계하고 제조합니다.");
+    expect(invokeLLM).not.toHaveBeenCalled();
   });
 });

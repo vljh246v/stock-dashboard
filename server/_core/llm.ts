@@ -69,6 +69,7 @@ export type InvokeParams = {
   tool_choice?: ToolChoice;
   maxTokens?: number;
   max_tokens?: number;
+  max_completion_tokens?: number;
   outputSchema?: OutputSchema;
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
@@ -218,6 +219,10 @@ const normalizeToolChoice = (
 
 let openai: OpenAI | null = null;
 
+function usesMaxCompletionTokens(model: string): boolean {
+  return /^(gpt-5|o\d|o-|chatgpt-4o)/.test(model);
+}
+
 const assertApiKey = () => {
   if (!ENV.openAiApiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
@@ -305,7 +310,13 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       normalizedToolChoice as ChatCompletionCreateParamsNonStreaming["tool_choice"];
   }
 
-  payload.max_tokens = params.maxTokens ?? params.max_tokens ?? 4096;
+  const maxTokens =
+    params.maxTokens ?? params.max_tokens ?? params.max_completion_tokens ?? 4096;
+  if (usesMaxCompletionTokens(ENV.openAiModel)) {
+    payload.max_completion_tokens = maxTokens;
+  } else {
+    payload.max_tokens = maxTokens;
+  }
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,

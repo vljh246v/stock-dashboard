@@ -25,10 +25,10 @@ export default function SentimentSection({ sentiment, isLoading, isETF }: Props)
       <Card className="bg-card border-border">
         <CardContent className="p-8 text-center space-y-3">
           <Newspaper className="h-10 w-10 text-muted-foreground mx-auto" />
-          <p className="text-sm font-medium text-foreground">ETF 감성 분석 미지원</p>
+          <p className="text-sm font-medium text-foreground">ETF 뉴스 심리 분석은 지원하지 않습니다</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            ETF는 개별 종목과 달리 뉴스 기반 감성 데이터가 제공되지 않습니다.<br />
-            ETF 정보 탭에서 운용사, 종보율, 상위 구성 종목을 확인하세요.
+            ETF는 개별 종목처럼 뉴스 심리 데이터를 안정적으로 제공하기 어렵습니다.<br />
+            ETF 정보 탭에서 운용사, 총보수, 상위 구성 종목을 확인해 주세요.
           </p>
         </CardContent>
       </Card>
@@ -41,7 +41,7 @@ export default function SentimentSection({ sentiment, isLoading, isETF }: Props)
         <CardContent className="p-6 text-center space-y-2">
           <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {sentiment?.marketImpact || "감성 분석 데이터를 불러올 수 없습니다."}
+            {sentiment?.marketImpact || "뉴스 심리 데이터를 불러오지 못했습니다."}
           </p>
         </CardContent>
       </Card>
@@ -74,7 +74,7 @@ export default function SentimentSection({ sentiment, isLoading, isETF }: Props)
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Newspaper className="h-4 w-4 text-primary" />
-            뉴스 감성 분석 요약
+            뉴스 심리 요약
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -87,7 +87,7 @@ export default function SentimentSection({ sentiment, isLoading, isETF }: Props)
             </div>
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">감성 점수</span>
+                <span className="text-xs text-muted-foreground">심리 점수</span>
                 <span className={`text-sm font-mono font-semibold ${getScoreColor(sentiment.sentimentScore)}`}>
                   {sentiment.sentimentScore !== null ? `${sentiment.sentimentScore}/100` : "N/A"}
                 </span>
@@ -107,7 +107,7 @@ export default function SentimentSection({ sentiment, isLoading, isETF }: Props)
       {sentiment.newsAnalysis && sentiment.newsAnalysis.length > 0 && (
         <Card className="bg-card border-border">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">뉴스/이벤트 감성 상세</CardTitle>
+            <CardTitle className="text-sm font-semibold">뉴스별 심리</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

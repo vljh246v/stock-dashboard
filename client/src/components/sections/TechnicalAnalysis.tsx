@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { reportDateSortKey } from "@shared/reportDates";
 import { TrendingUp, TrendingDown, Minus, Target, CandlestickChart, LineChart as LineChartIcon } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Bar, BarChart, Cell, ComposedChart, Line } from "recharts";
 import { useState, useMemo } from "react";
@@ -54,7 +55,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
   const reports = insights?.reports || [];
   const latestReportWithTarget = reports
     .filter((r: any) => r.targetPrice != null)
-    .sort((a: any, b: any) => (b.reportDate || "").localeCompare(a.reportDate || ""))[0];
+    .sort((a: any, b: any) => reportDateSortKey(b.reportDate).localeCompare(reportDateSortKey(a.reportDate)))[0];
   const targetPrice: number | null = recommendation.targetPrice ?? latestReportWithTarget?.targetPrice ?? null;
   const targetPriceProvider: string = recommendation.provider || latestReportWithTarget?.provider || "";
 
@@ -82,7 +83,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">주가 차트 (6개월)</CardTitle>
+            <CardTitle className="text-sm font-semibold">6개월 주가 흐름</CardTitle>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 bg-secondary rounded-md p-0.5">
                 <Button
@@ -92,7 +93,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                   onClick={() => setChartType("line")}
                 >
                   <LineChartIcon className="h-3 w-3 mr-1" />
-                  라인
+                  선
                 </Button>
                 <Button
                   variant={chartType === "candle" ? "default" : "ghost"}
@@ -105,9 +106,9 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                 </Button>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>현재가: ${meta.regularMarketPrice?.toFixed(2) || "N/A"}</span>
-                <span>52주 최고: ${meta.fiftyTwoWeekHigh?.toFixed(2) || "N/A"}</span>
-                <span>52주 최저: ${meta.fiftyTwoWeekLow?.toFixed(2) || "N/A"}</span>
+                <span>현재 ${meta.regularMarketPrice?.toFixed(2) || "N/A"}</span>
+                <span>52주 고점 ${meta.fiftyTwoWeekHigh?.toFixed(2) || "N/A"}</span>
+                <span>52주 저점 ${meta.fiftyTwoWeekLow?.toFixed(2) || "N/A"}</span>
               </div>
             </div>
           </div>
@@ -213,7 +214,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
             )
           ) : (
             <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              차트 데이터를 불러올 수 없습니다.
+              차트 데이터를 불러오지 못했습니다.
             </div>
           )}
         </CardContent>
@@ -266,7 +267,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
           <CardContent className="p-4 flex items-center gap-3">
             <Target className="h-5 w-5 text-stock-down" />
             <div>
-              <p className="text-xs text-muted-foreground">손절가</p>
+              <p className="text-xs text-muted-foreground">손절 기준</p>
               <p className="text-lg font-mono font-semibold">
                 {keyTechnicals.stopLoss != null ? `$${keyTechnicals.stopLoss.toFixed(2)}` : "N/A"}
               </p>
@@ -282,7 +283,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
             <div>
               <p className="text-xs text-muted-foreground">목표가</p>
               {isETF ? (
-                <p className="text-sm text-muted-foreground italic">ETF 해당 없음</p>
+                <p className="text-sm text-muted-foreground italic">ETF는 해당 없음</p>
               ) : (
                 <>
                   <p className="text-lg font-mono font-semibold">

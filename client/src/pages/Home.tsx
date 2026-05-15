@@ -29,7 +29,9 @@ export default function Home() {
             <span className="text-xl font-bold tracking-tight">StockPulse</span>
           </div>
           <Button
-            onClick={() => { window.location.href = getLoginUrl(); }}
+            onClick={() => {
+              window.location.href = getLoginUrl();
+            }}
             variant="default"
             size="sm"
           >
@@ -42,42 +44,44 @@ export default function Home() {
       <main className="flex-1 flex items-center justify-center px-6">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
-            AI 기반 <span className="text-primary">주식 분석</span> 대시보드
+            미국 주식 분석을 <span className="text-primary">한 화면에서</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            종목 티커를 입력하면 기업 개요, 기술적 분석, 재무 지표, 거버넌스, 뉴스 감성까지
-            전문적인 금융 분석을 한눈에 확인하세요.
+            티커만 입력하면 회사 기본 정보, 차트 흐름, 밸류에이션, 공시, 뉴스
+            분위기까지 한 번에 확인할 수 있습니다.
           </p>
 
           <Button
-            onClick={() => { window.location.href = getLoginUrl(); }}
+            onClick={() => {
+              window.location.href = getLoginUrl();
+            }}
             size="lg"
             className="px-8 py-3 text-base"
           >
-            시작하기
+            대시보드 시작하기
           </Button>
 
           {/* Features Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-12">
             <FeatureCard
               icon={<TrendingUp className="h-5 w-5" />}
-              title="기술적 분석"
-              desc="MACD, RSI, 지지/저항선 등 핵심 기술 지표"
+              title="차트 흐름"
+              desc="6개월 가격 흐름과 주요 기술 지표"
             />
             <FeatureCard
               icon={<BarChart3 className="h-5 w-5" />}
-              title="재무 분석"
-              desc="밸류에이션, 애널리스트 평가, 기업 품질 점수"
+              title="가치 평가"
+              desc="밸류에이션, 목표가, 기업 품질 점수"
             />
             <FeatureCard
               icon={<Shield className="h-5 w-5" />}
-              title="거버넌스"
-              desc="내부자 거래, 경영진 지분, SEC 공시 추적"
+              title="공시와 내부자"
+              desc="SEC 공시와 내부자 보유 현황"
             />
             <FeatureCard
               icon={<Brain className="h-5 w-5" />}
-              title="AI 투자 의견"
-              desc="LLM 기반 Bull/Bear 분석 및 감성 점수"
+              title="의견 요약"
+              desc="강세·약세 요인과 뉴스 심리 정리"
             />
           </div>
         </div>
@@ -86,7 +90,15 @@ export default function Home() {
   );
 }
 
-function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+function FeatureCard({
+  icon,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
   return (
     <div className="bg-card border border-border rounded-lg p-5 text-left space-y-2">
       <div className="text-primary">{icon}</div>

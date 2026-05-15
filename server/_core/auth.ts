@@ -1,4 +1,8 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import {
+  ACCOUNT_PENDING_APPROVAL_MSG,
+  COOKIE_NAME,
+  ONE_YEAR_MS,
+} from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -18,6 +22,10 @@ type SessionPayload = {
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+export function isUserApproved(user: Pick<User, "approvedAt">): boolean {
+  return Boolean(user.approvedAt);
+}
 
 const getSessionSecret = () => {
   if (!ENV.cookieSecret) {
@@ -108,6 +116,9 @@ export async function authenticateRequest(req: Request): Promise<User> {
   if (!user) {
     throw ForbiddenError("User not found");
   }
+  if (!isUserApproved(user)) {
+    throw ForbiddenError(ACCOUNT_PENDING_APPROVAL_MSG);
+  }
 
   await db.upsertUser({
     openId: user.openId,
@@ -135,6 +146,8 @@ export async function registerWithEmail(input: {
     name: input.name?.trim() || email.split("@")[0],
     passwordHash: await hashPassword(input.password),
     loginMethod: "email",
+    role: "user",
+    approvedAt: null,
     lastSignedIn: new Date(),
   });
 
@@ -154,6 +167,9 @@ export async function loginWithEmail(input: {
 
   if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
     throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+  }
+  if (!isUserApproved(user)) {
+    throw new Error(ACCOUNT_PENDING_APPROVAL_MSG);
   }
 
   await db.upsertUser({

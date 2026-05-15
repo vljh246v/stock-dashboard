@@ -12,12 +12,15 @@ import {
   LogOut,
   Loader2,
   Search,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import StockDashboard from "@/components/StockDashboard";
 import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
+import { buildWatchlistDisplayItems } from "@/lib/watchlistDisplay";
+import { normalizeStockSymbol } from "@shared/stockSymbols";
 
 export default function Dashboard() {
   const { user, loading, logout } = useAuth();
@@ -25,10 +28,13 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [newSymbol, setNewSymbol] = useState("");
 
-  const selectedSymbol = params?.symbol?.toUpperCase() || "";
+  const selectedSymbol = params?.symbol ? normalizeStockSymbol(params.symbol) : "";
 
   const watchlistQuery = trpc.watchlist.list.useQuery(undefined, {
     enabled: !!user,
+  });
+  const pendingUsersQuery = trpc.auth.pendingUsers.useQuery(undefined, {
+    enabled: user?.role === "admin",
   });
 
   const addMutation = trpc.watchlist.add.useMutation({
@@ -40,7 +46,7 @@ export default function Dashboard() {
       }
     },
     onError: (error) => {
-      toast.error(error.message || "종목을 추가할 수 없습니다. 정확한 티커를 입력해주세요.");
+      toast.error(error.message || "종목을 추가하지 못했습니다. 티커를 다시 확인해 주세요.");
     },
   });
 
@@ -53,6 +59,16 @@ export default function Dashboard() {
     },
   });
 
+  const approveUserMutation = trpc.auth.approveUser.useMutation({
+    onSuccess: approvedUser => {
+      toast.success(`${approvedUser?.email || "사용자"} 계정을 승인했습니다.`);
+      pendingUsersQuery.refetch();
+    },
+    onError: error => {
+      toast.error(error.message || "사용자 승인을 처리하지 못했습니다.");
+    },
+  });
+
   if (loading) {
     return <DashboardLayoutSkeleton />;
   }
@@ -62,9 +78,9 @@ export default function Dashboard() {
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
           <BarChart3 className="h-12 w-12 text-primary" />
-          <h1 className="text-2xl font-semibold text-foreground">로그인이 필요합니다</h1>
+          <h1 className="text-2xl font-semibold text-foreground">로그인 후 이용할 수 있습니다</h1>
           <p className="text-sm text-muted-foreground text-center">
-            주식 분석 대시보드를 이용하려면 로그인해주세요.
+            관심 종목과 분석 결과를 보려면 먼저 로그인해 주세요.
           </p>
           <Button
             onClick={() => { window.location.href = getLoginUrl(); }}
@@ -80,12 +96,16 @@ export default function Dashboard() {
 
   const handleAddSymbol = (e: React.FormEvent) => {
     e.preventDefault();
-    const symbol = newSymbol.trim().toUpperCase();
+    const symbol = normalizeStockSymbol(newSymbol);
     if (!symbol) return;
     addMutation.mutate({ symbol });
   };
 
   const watchlist = watchlistQuery.data || [];
+  const watchlistItems = buildWatchlistDisplayItems(watchlist, selectedSymbol);
+  const pendingUsers = (pendingUsersQuery.data || []).filter(
+    pendingUser => pendingUser !== null
+  );
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -103,7 +123,7 @@ export default function Dashboard() {
             <Input
               value={newSymbol}
               onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-              placeholder="티커 입력 (예: AAPL)"
+              placeholder="티커 추가 (예: AAPL)"
               className="h-8 text-xs bg-input border-border"
             />
             <Button
@@ -129,15 +149,15 @@ export default function Dashboard() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
-            ) : watchlist.length === 0 ? (
+            ) : watchlistItems.length === 0 ? (
               <div className="text-center py-8 px-3">
                 <Search className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
                 <p className="text-xs text-muted-foreground">
-                  관심 종목을 추가해보세요
+                  아직 추가한 종목이 없습니다
                 </p>
               </div>
             ) : (
-              watchlist.map((item) => (
+              watchlistItems.map((item) => (
                 <div
                   key={item.id}
                   className={`group flex items-center justify-between rounded-md px-3 py-2 cursor-pointer transition-colors ${
@@ -153,20 +173,86 @@ export default function Dashboard() {
                       <span className="text-xs text-muted-foreground truncate">{item.name}</span>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeMutation.mutate({ symbol: item.symbol });
-                    }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/20 rounded"
-                  >
-                    <Trash2 className="h-3 w-3 text-destructive" />
-                  </button>
+                  {item.saved ? (
+                    <button
+                      type="button"
+                      aria-label={`${item.symbol} 제거`}
+                      title="관심 종목에서 제거"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeMutation.mutate({ symbol: item.symbol });
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/20 rounded"
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`${item.symbol} 추가`}
+                      title="관심 종목에 추가"
+                      disabled={addMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addMutation.mutate({ symbol: item.symbol });
+                      }}
+                      className="p-1 hover:bg-sidebar-accent rounded disabled:opacity-50"
+                    >
+                      {addMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
                 </div>
               ))
             )}
           </div>
         </ScrollArea>
+
+        {user.role === "admin" && (
+          <>
+            <Separator />
+            <div className="p-3 space-y-2 shrink-0">
+              <div className="flex items-center gap-2 text-xs font-medium text-sidebar-foreground">
+                <UserCheck className="h-3.5 w-3.5" />
+                가입 승인
+              </div>
+              {pendingUsersQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  확인 중
+                </div>
+              ) : pendingUsers.length === 0 ? (
+                <p className="text-xs text-muted-foreground">대기 중인 계정이 없습니다</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {pendingUsers.map(pendingUser => (
+                    <div
+                      key={pendingUser.id}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">
+                        {pendingUser.email || pendingUser.name || pendingUser.openId}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 px-2 text-xs"
+                        disabled={approveUserMutation.isPending}
+                        onClick={() => approveUserMutation.mutate({ userId: pendingUser.id })}
+                      >
+                        승인
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* User Footer */}
         <Separator />
@@ -186,9 +272,9 @@ export default function Dashboard() {
           <div className="flex items-center justify-center h-full">
             <div className="text-center space-y-3">
               <BarChart3 className="h-16 w-16 text-muted-foreground/30 mx-auto" />
-              <h2 className="text-lg font-medium text-muted-foreground">종목을 선택하세요</h2>
+              <h2 className="text-lg font-medium text-muted-foreground">분석할 종목을 선택하세요</h2>
               <p className="text-sm text-muted-foreground/70">
-                사이드바에서 종목을 선택하거나 새 종목을 추가해주세요
+                왼쪽에서 종목을 고르거나 티커를 새로 추가해 주세요.
               </p>
             </div>
           </div>
