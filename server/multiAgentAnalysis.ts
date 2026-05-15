@@ -5,7 +5,7 @@ import { OPINION_TRACKING_VERSION, selectOpinionBaselineClose } from "./opinionT
 import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
 
 const CACHE_TTL_OPINION = 120; // 2 hours
-const CACHE_VERSION = "_v9_score_confidence";
+const CACHE_VERSION = "_v10_guidance_evidence";
 
 type Signal = "매수" | "보유" | "매도";
 type Confidence = "높음" | "중간" | "낮음";
@@ -271,12 +271,41 @@ function agentContext(agent: AgentResult): string {
   return `${agent.agentName}: ${agent.signal}/${agent.confidence}. ${agent.reasoning} 핵심: ${agent.keyPoints.join(", ")}`;
 }
 
+function formatGuidanceEvidenceLines(pack: AnalysisPack, max = 5): string[] {
+  const evidence = Array.isArray(pack.guidance?.evidence)
+    ? pack.guidance.evidence
+    : [];
+  const lines = evidence
+    .slice(0, max)
+    .map(metric => {
+      const label = metric.label?.trim();
+      const value = metric.value?.trim();
+      const source = metric.source?.trim();
+      if (!label || !value || !source) return "";
+
+      const comparisonPart = metric.comparison?.trim()
+        ? ` (${metric.comparison.trim()})`
+        : "";
+      const asOfPart = metric.asOf?.trim()
+        ? ` · 기준 ${metric.asOf.trim()}`
+        : "";
+      const categoryPart = metric.category
+        ? ` · 분류 ${metric.category}`
+        : "";
+      return `검증된 가이던스 근거: ${label}: ${value}${comparisonPart} · 출처 ${source}${asOfPart}${categoryPart}`;
+    })
+    .filter(Boolean);
+
+  return lines.length > 0 ? lines : ["검증된 가이던스 근거: 확인 불가"];
+}
+
 function packContext(pack: AnalysisPack): string {
   const lines = [
     `자산: ${pack.asset.assetType} · ${pack.asset.displayName}`,
     `가격: 현재가 ${pack.price.current ?? "N/A"}, 52주 고점 ${pack.price.fiftyTwoWeekHigh ?? "N/A"}, 52주 저점 ${pack.price.fiftyTwoWeekLow ?? "N/A"}`,
     `기술: ${pack.technical.summary}; ${pack.technical.outlooks.join(", ") || "N/A"}`,
     `밸류에이션: ${pack.valuation.summary}`,
+    ...formatGuidanceEvidenceLines(pack),
     `뉴스/이벤트: ${pack.news.events.map(event => event.headline).slice(0, 4).join("; ") || "N/A"}`,
     `공시: ${pack.filings.latest.slice(0, 3).join("; ") || "N/A"}`,
     `보유/거버넌스: ${pack.governance.qualitySignals.concat(pack.governance.insiderTransactions).slice(0, 5).join("; ") || "N/A"}`,
@@ -540,6 +569,13 @@ function buildResearchReport(symbol: string, pack: AnalysisPack, agents: AgentRe
     pack.price.support !== undefined ? `지지선 ${pack.price.support}` : undefined,
     pack.price.stopLoss !== undefined ? `무효화 기준 ${pack.price.stopLoss}` : undefined,
   ].filter((item): item is string => typeof item === "string" && item.length > 0);
+  const stockEvidenceBullets = [
+    ...formatGuidanceEvidenceLines(pack),
+    pack.valuation.summary,
+    pack.valuation.targetPrice !== undefined ? `목표가 ${pack.valuation.targetPrice}` : "목표가 데이터 부족",
+    ...pack.governance.qualitySignals.slice(0, 4),
+    ...pack.filings.latest.slice(0, 2),
+  ];
   const evidenceBullets = pack.asset.assetType === "etf"
     ? [
         pack.etf?.expenseRatio ? `총보수율 ${pack.etf.expenseRatio}` : "총보수율 데이터 부족",
@@ -547,12 +583,7 @@ function buildResearchReport(symbol: string, pack: AnalysisPack, agents: AgentRe
         pack.etf?.topHoldingsWeight !== undefined ? `상위 보유 종목 비중 ${pack.etf.topHoldingsWeight.toFixed(1)}%` : "구성 종목 데이터 부족",
         ...pack.tabData.etf.highlights.slice(0, 3),
       ]
-    : [
-        pack.valuation.summary,
-        pack.valuation.targetPrice !== undefined ? `목표가 ${pack.valuation.targetPrice}` : "목표가 데이터 부족",
-        ...pack.governance.qualitySignals.slice(0, 4),
-        ...pack.filings.latest.slice(0, 2),
-      ];
+    : stockEvidenceBullets;
 
   return localizeResearchReport({
     thesis: `${symbol}은 현재 ${verdict.signal} 의견입니다. ${pack.asset.displayName}의 가격, 기술 흐름, 밸류에이션, 뉴스/공시, 리스크 의견을 함께 반영했습니다.`,
@@ -567,7 +598,7 @@ function buildResearchReport(symbol: string, pack: AnalysisPack, agents: AgentRe
       },
       {
         title: "근거 데이터",
-        bullets: evidenceBullets.filter(Boolean).slice(0, 7),
+        bullets: evidenceBullets.filter(Boolean).slice(0, pack.asset.assetType === "etf" ? 7 : 10),
       },
       {
         title: "기술·가격 구조",
@@ -793,6 +824,7 @@ async function runPortfolioManager(symbol: string, agents: AgentResult[], analys
   const prompt = `TradingAgents의 Portfolio Manager 역할입니다.
 아래 공유 분석 데이터와 단계별 결과를 종합해 최종 포트폴리오 관점의 판단을 내리세요. 리스크 관리자가 매도라면 최종 의견을 매수로 내지 마세요.
 짧은 감상이 아니라 리서치 보고서의 결론 문단처럼 근거와 반대 논거를 모두 연결하세요.
+숫자형 가이던스 주장은 아래 검증된 가이던스 근거에 있는 값만 사용하세요. EPS, 매출, 마진, 백로그, 수주, 가이던스 숫자를 계산·추론·창작하지 말고, 근거가 없으면 확인 불가로 다루세요.
 
 ## ${symbol} 공유 분석 데이터
 ${packContext(analysisPack)}

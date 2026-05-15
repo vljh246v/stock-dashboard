@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeLLM } from "./_core/llm";
 import * as db from "./db";
 import { generateMultiAgentOpinion } from "./multiAgentAnalysis";
+import type { AnalysisPack, GuidanceEvidenceMetric } from "./analysisPack";
 
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn(),
@@ -52,6 +53,64 @@ const chartData = {
   },
 };
 
+function makeAnalysisPack(
+  guidanceEvidence: GuidanceEvidenceMetric[] = [],
+  guidanceHighlights: string[] = []
+): AnalysisPack {
+  return {
+    symbol: "AAPL",
+    asset: {
+      assetType: "stock",
+      displayName: "Apple Inc.",
+      sector: "Technology",
+    },
+    price: {
+      current: 185.5,
+      fiftyTwoWeekHigh: 199,
+      fiftyTwoWeekLow: 150,
+      support: 185,
+      stopLoss: 174,
+    },
+    technical: {
+      averageScore: 2.3,
+      outlooks: ["단기 강세", "중기 중립"],
+      summary: "기술 흐름은 우호적입니다.",
+    },
+    valuation: {
+      summary: "밸류에이션 요약",
+      rating: "Buy",
+      targetPrice: 230,
+      analystCount: 30,
+    },
+    news: {
+      events: [{ headline: "Apple announces new product" }],
+      bullishPoints: ["제품 뉴스 긍정"],
+      bearishPoints: ["고평가 부담"],
+    },
+    guidance: {
+      evidence: guidanceEvidence,
+    },
+    metrics: {} as AnalysisPack["metrics"],
+    governance: {
+      qualitySignals: ["혁신 80점", "지속가능성 60점"],
+      insiderTransactions: ["내부자 심리 55점"],
+    },
+    filings: {
+      latest: ["10-Q filing"],
+    },
+    tabData: {
+      overview: { highlights: ["Apple Inc."] },
+      technical: { highlights: ["단기 강세"] },
+      financial: { highlights: ["밸류에이션 요약"] },
+      guidance: { highlights: guidanceHighlights },
+      filings: { highlights: ["10-Q filing"] },
+      etf: { highlights: [] },
+      sentiment: { highlights: ["제품 뉴스 긍정"] },
+    },
+    sources: [{ name: "Yahoo quoteSummary", status: "used" }],
+  };
+}
+
 const llmJson = (payload: unknown) => ({
   id: "chatcmpl-test",
   created: 0,
@@ -98,10 +157,10 @@ describe("generateMultiAgentOpinion fallback", () => {
   it("uses a cache key that does not reuse old agent-error opinion cache", async () => {
     await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
 
-    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v9_score_confidence");
+    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v10_guidance_evidence");
     expect(db.setCachedData).toHaveBeenCalledWith(
       "AAPL",
-      "llm_multi_opinion_v9_score_confidence",
+      "llm_multi_opinion_v10_guidance_evidence",
       expect.any(Object),
       120
     );
@@ -113,7 +172,7 @@ describe("generateMultiAgentOpinion fallback", () => {
     expect(db.createOpinionSnapshotWithPendingOutcomes).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: "AAPL",
-        opinionVersion: "llm_multi_opinion_v9_score_confidence",
+        opinionVersion: "llm_multi_opinion_v10_guidance_evidence",
         finalSignal: expect.any(String),
         finalConfidence: expect.any(String),
         startObservedDate: expect.any(Date),
@@ -186,7 +245,7 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
   it("does not create a tracking snapshot when returning cached opinion", async () => {
     vi.mocked(db.getCachedData).mockResolvedValueOnce({
       generatedAt: "2026-01-01T00:00:00.000Z",
-      opinionVersion: "llm_multi_opinion_v9_score_confidence",
+      opinionVersion: "llm_multi_opinion_v10_guidance_evidence",
       agents: [],
       workflow: {
         source: "TradingAgents-style research report",
@@ -254,5 +313,51 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
     expect(JSON.stringify(result.researchReport)).toContain("혁신 80점");
     expect(JSON.stringify(result.researchReport)).not.toMatch(/\d+\.\d{4,}/);
     expect(JSON.stringify(result.researchReport)).not.toMatch(/\b(Bullish|Neutral|Overvalued|Buy)\b/);
+  });
+
+  it("passes verified guidance evidence and anti-invention rules to the portfolio manager", async () => {
+    const analysisPack = makeAnalysisPack([
+      {
+        label: "최근 EPS",
+        value: "$0.14",
+        comparison: "예상 $0.12 · 서프라이즈 +16.7%",
+        source: "Yahoo earningsHistory",
+        asOf: "2025-09-30",
+        category: "reported",
+      },
+    ]);
+
+    const result = await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData, {
+      analysisPack,
+    });
+    const portfolioPrompt = vi.mocked(invokeLLM).mock.calls[7]?.[0].messages[1].content;
+
+    expect(portfolioPrompt).toContain("검증된 가이던스 근거: 최근 EPS: $0.14");
+    expect(portfolioPrompt).toContain("Yahoo earningsHistory");
+    expect(portfolioPrompt).toContain("2025-09-30");
+    expect(portfolioPrompt).toContain("계산·추론·창작하지 말고");
+    expect(portfolioPrompt).toContain("근거가 없으면 확인 불가");
+
+    const evidenceSection = result.researchReport.sections.find(section => section.title === "근거 데이터");
+    expect(evidenceSection?.bullets[0]).toContain("검증된 가이던스 근거: 최근 EPS: $0.14");
+    expect(evidenceSection?.bullets.findIndex(bullet => bullet.includes("최근 EPS"))).toBeLessThan(
+      evidenceSection?.bullets.findIndex(bullet => bullet.includes("밸류에이션 요약")) ?? Number.MAX_SAFE_INTEGER
+    );
+  });
+
+  it("does not trust prose-only guidance highlights as numeric guidance evidence", async () => {
+    const proseOnlyClaim = "FY25 매출 $9.99B로 상향이라는 미검증 문장";
+    const analysisPack = makeAnalysisPack([], [proseOnlyClaim]);
+
+    const result = await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData, {
+      analysisPack,
+    });
+    const portfolioPrompt = vi.mocked(invokeLLM).mock.calls[7]?.[0].messages[1].content;
+    const serializedReport = JSON.stringify(result.researchReport);
+
+    expect(portfolioPrompt).toContain("검증된 가이던스 근거: 확인 불가");
+    expect(portfolioPrompt).not.toContain(proseOnlyClaim);
+    expect(serializedReport).toContain("검증된 가이던스 근거: 확인 불가");
+    expect(serializedReport).not.toContain(proseOnlyClaim);
   });
 });
