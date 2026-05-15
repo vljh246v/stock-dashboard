@@ -2,6 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   translateFinancialTerm,
   translateFinancialText,
 } from "@shared/financialTerms";
@@ -345,70 +351,77 @@ export default function GuidanceSection({
 
       {/* Morningstar 강세/약세 분석 */}
       {(bullPoints.length > 0 || bearPoints.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {isTranslating && (
-            <div className="col-span-full text-center py-2">
-              <p className="text-xs text-muted-foreground animate-pulse">
-                한국어로 정리하는 중...
-              </p>
-            </div>
-          )}
-          {/* 강세 시나리오 */}
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-stock-up" />
-                강세 요인
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {bullPoints.map((point: string, idx: number) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <Badge
-                      variant="outline"
-                      className="shrink-0 mt-0.5 text-stock-up border-stock-up/30 bg-stock-up/10 text-xs px-1.5"
-                    >
-                      {idx + 1}
-                    </Badge>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {translation?.bullPointsKo?.[idx] ||
-                        translateFinancialText(point)}
+        <Accordion type="single" collapsible className="rounded-md border border-border px-4">
+          <AccordionItem value="morningstar-details">
+            <AccordionTrigger>강세/약세 리포트 상세</AccordionTrigger>
+            <AccordionContent>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {isTranslating && (
+                  <div className="col-span-full text-center py-2">
+                    <p className="text-xs text-muted-foreground animate-pulse">
+                      한국어로 정리하는 중...
                     </p>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                )}
+                {/* 강세 시나리오 */}
+                <Card className="bg-card border-border">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-stock-up" />
+                      강세 요인
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {bullPoints.map((point: string, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 mt-0.5 text-stock-up border-stock-up/30 bg-stock-up/10 text-xs px-1.5"
+                          >
+                            {idx + 1}
+                          </Badge>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {translation?.bullPointsKo?.[idx] ||
+                              translateFinancialText(point)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
 
-          {/* 약세 시나리오 */}
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-stock-down" />
-                약세 요인
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {bearPoints.map((point: string, idx: number) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <Badge
-                      variant="outline"
-                      className="shrink-0 mt-0.5 text-stock-down border-stock-down/30 bg-stock-down/10 text-xs px-1.5"
-                    >
-                      {idx + 1}
-                    </Badge>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {translation?.bearPointsKo?.[idx] ||
-                        translateFinancialText(point)}
-                    </p>
-                  </div>
-                ))}
+                {/* 약세 시나리오 */}
+                <Card className="bg-card border-border">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <TrendingDown className="h-4 w-4 text-stock-down" />
+                      약세 요인
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {bearPoints.map((point: string, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 mt-0.5 text-stock-down border-stock-down/30 bg-stock-down/10 text-xs px-1.5"
+                          >
+                            {idx + 1}
+                          </Badge>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {translation?.bearPointsKo?.[idx] ||
+                              translateFinancialText(point)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
 
       {/* Source Info */}

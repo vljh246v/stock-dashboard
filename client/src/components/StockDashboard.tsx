@@ -1,8 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Database, FileText, History, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { coerceDashboardTabForAsset } from "@/lib/dashboardTabs";
 import { translateIndustry, translateSector } from "@/lib/stockLocalization";
 import CompanyOverview from "./sections/CompanyOverview";
 import CoreMetricsSection from "./sections/CoreMetricsSection";
@@ -20,7 +28,123 @@ interface StockDashboardProps {
   symbol: string;
 }
 
+interface AnalysisSource {
+  name: string;
+  status: "used" | "fallback" | "unavailable";
+  asOf?: string;
+}
+
+const sourceStatusLabel: Record<AnalysisSource["status"], string> = {
+  used: "확인",
+  fallback: "보조",
+  unavailable: "없음",
+};
+
+function EvidenceSummaryCard({
+  sources,
+  onOpenEvidence,
+}: {
+  sources?: AnalysisSource[];
+  onOpenEvidence: () => void;
+}) {
+  const activeSources = (sources || []).filter(
+    source => source.status !== "unavailable"
+  );
+
+  return (
+    <Card className="bg-card border-border">
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Database className="h-4 w-4 text-primary" />
+            출처 검증 요약
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {activeSources.length > 0
+              ? activeSources
+                  .map(
+                    source =>
+                      `${source.name}(${sourceStatusLabel[source.status]})`
+                  )
+                  .join(", ")
+              : "확인된 근거 없음"}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={onOpenEvidence}
+        >
+          근거/추적 보기
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EvidenceOverview({
+  hasFilings,
+  sources,
+}: {
+  hasFilings: boolean;
+  sources?: AnalysisSource[];
+}) {
+  const activeSources = (sources || []).filter(
+    source => source.status !== "unavailable"
+  );
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <Card className="bg-card border-border">
+        <CardContent className="p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+            <History className="h-4 w-4 text-primary" />
+            의견 추적
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            과거 의견과 1개월/3개월 이후 흐름을 보수적으로 비교합니다.
+          </p>
+        </CardContent>
+      </Card>
+      <Card className="bg-card border-border">
+        <CardContent className="p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+            <FileText className="h-4 w-4 text-primary" />
+            공시
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {hasFilings
+              ? "SEC 공시와 주요 이벤트를 같은 신뢰 흐름에서 확인합니다."
+              : "개별 기업 공시가 없는 자산은 출처 요약 중심으로 확인합니다."}
+          </p>
+        </CardContent>
+      </Card>
+      <Card className="bg-card border-border">
+        <CardContent className="p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+            <Database className="h-4 w-4 text-primary" />
+            출처 검증 요약
+          </div>
+          <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {activeSources.length > 0
+              ? activeSources
+                  .map(
+                    source =>
+                      `${source.name}(${sourceStatusLabel[source.status]})`
+                  )
+                  .join(", ")
+              : "확인된 근거 없음"}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function StockDashboard({ symbol }: StockDashboardProps) {
+  const [activeTab, setActiveTab] = useState("core");
   const utils = trpc.useUtils();
   const analysisPackQuery = trpc.stock.analysisPack.useQuery(
     { symbol },
@@ -73,6 +197,10 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
     analysisPackQuery.data?.pack.asset.assetType === "etf" ||
     !!profileData?.fundProfile ||
     chartMeta?.instrumentType === "ETF";
+
+  useEffect(() => {
+    setActiveTab(currentTab => coerceDashboardTabForAsset(currentTab, isETF));
+  }, [isETF, symbol]);
 
   if (isLoading) {
     return (
@@ -145,66 +273,60 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
         </div>
       </div>
 
-      <DecisionSummaryCard
-        summary={analysisPackQuery.data?.decisionSummary}
-        isLoading={analysisPackQuery.isLoading}
-      />
-
       {/* Tabs */}
-      <Tabs defaultValue="metrics" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-secondary border border-border w-full justify-start overflow-x-auto flex-nowrap">
-          <TabsTrigger value="metrics" className="text-xs">
-            핵심 지표
-          </TabsTrigger>
-          <TabsTrigger value="overview" className="text-xs">
-            개요
+          <TabsTrigger value="core" className="text-xs">
+            핵심
           </TabsTrigger>
           <TabsTrigger value="technical" className="text-xs">
             차트
           </TabsTrigger>
-          {!isETF && (
-            <TabsTrigger value="financial" className="text-xs">
-              재무
-            </TabsTrigger>
-          )}
           {isETF ? (
             <TabsTrigger value="etf" className="text-xs">
               ETF 정보
             </TabsTrigger>
           ) : (
-            <TabsTrigger value="guidance" className="text-xs">
-              가이던스
-            </TabsTrigger>
-          )}
-          {!isETF && (
-            <TabsTrigger value="filings" className="text-xs">
-              공시
+            <TabsTrigger value="financial-guidance" className="text-xs">
+              재무/가이던스
             </TabsTrigger>
           )}
           <TabsTrigger value="opinion" className="text-xs">
-            의견
+            분석 의견
           </TabsTrigger>
-          <TabsTrigger value="opinion-tracking" className="text-xs">
-            의견 추적
+          <TabsTrigger value="evidence" className="text-xs">
+            근거/추적
           </TabsTrigger>
           <TabsTrigger value="sentiment" className="text-xs">
             뉴스
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4">
-          <CompanyOverview
-            data={profileData}
+        <TabsContent value="core" className="mt-4 space-y-4">
+          <DecisionSummaryCard
+            summary={analysisPackQuery.data?.decisionSummary}
             isLoading={analysisPackQuery.isLoading}
-            chartMeta={chartMeta}
           />
-        </TabsContent>
-
-        <TabsContent value="metrics" className="mt-4">
           <CoreMetricsSection
             metrics={analysisPackQuery.data?.pack.metrics}
             isLoading={analysisPackQuery.isLoading}
           />
+          <EvidenceSummaryCard
+            sources={analysisPackQuery.data?.pack.sources}
+            onOpenEvidence={() => setActiveTab("evidence")}
+          />
+          <Accordion type="single" collapsible className="rounded-md border border-border px-4">
+            <AccordionItem value="overview">
+              <AccordionTrigger>회사/자산 개요</AccordionTrigger>
+              <AccordionContent>
+                <CompanyOverview
+                  data={profileData}
+                  isLoading={analysisPackQuery.isLoading}
+                  chartMeta={chartMeta}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </TabsContent>
 
         <TabsContent value="technical" className="mt-4">
@@ -217,25 +339,11 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
         </TabsContent>
 
         {!isETF && (
-          <TabsContent value="financial" className="mt-4">
+          <TabsContent value="financial-guidance" className="mt-4 space-y-4">
             <FinancialValuation
               insights={insightsData}
               isLoading={analysisPackQuery.isLoading}
             />
-          </TabsContent>
-        )}
-
-        {isETF ? (
-          <TabsContent value="etf" className="mt-4">
-            <ETFSection
-              profileData={profileData}
-              holdings={analysisPackQuery.data?.raw.etfHoldings}
-              isLoadingProfile={analysisPackQuery.isLoading}
-              isLoadingHoldings={analysisPackQuery.isLoading}
-            />
-          </TabsContent>
-        ) : (
-          <TabsContent value="guidance" className="mt-4">
             <GuidanceSection
               insights={insightsData}
               evidence={analysisPackQuery.data?.pack.guidance.evidence}
@@ -245,28 +353,44 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
           </TabsContent>
         )}
 
-        {!isETF && (
-          <TabsContent value="filings" className="mt-4">
+        {isETF && (
+          <TabsContent value="etf" className="mt-4">
+            <ETFSection
+              profileData={profileData}
+              holdings={analysisPackQuery.data?.raw.etfHoldings}
+              isLoadingProfile={analysisPackQuery.isLoading}
+              isLoadingHoldings={analysisPackQuery.isLoading}
+            />
+          </TabsContent>
+        )}
+
+        <TabsContent value="opinion" className="mt-4 space-y-4">
+          <InvestmentOpinion
+            opinion={opinionQuery.data}
+            isLoading={opinionQuery.isLoading}
+          />
+          <EvidenceSummaryCard
+            sources={analysisPackQuery.data?.pack.sources}
+            onOpenEvidence={() => setActiveTab("evidence")}
+          />
+        </TabsContent>
+
+        <TabsContent value="evidence" className="mt-4 space-y-4">
+          <EvidenceOverview
+            hasFilings={!isETF}
+            sources={analysisPackQuery.data?.pack.sources}
+          />
+          <OpinionTrackingTable
+            tracking={opinionTrackingQuery.data}
+            isLoading={opinionTrackingQuery.isLoading}
+          />
+          {!isETF && (
             <FilingsSection
               filings={analysisPackQuery.data?.raw.secFilings}
               insights={insightsData}
               isLoading={analysisPackQuery.isLoading}
             />
-          </TabsContent>
-        )}
-
-        <TabsContent value="opinion" className="mt-4">
-          <InvestmentOpinion
-            opinion={opinionQuery.data}
-            isLoading={opinionQuery.isLoading}
-          />
-        </TabsContent>
-
-        <TabsContent value="opinion-tracking" className="mt-4">
-          <OpinionTrackingTable
-            tracking={opinionTrackingQuery.data}
-            isLoading={opinionTrackingQuery.isLoading}
-          />
+          )}
         </TabsContent>
 
         <TabsContent value="sentiment" className="mt-4">

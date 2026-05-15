@@ -108,9 +108,9 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex h-screen flex-col bg-background text-foreground overflow-hidden md:flex-row">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border flex flex-col bg-sidebar shrink-0">
+      <aside className="flex max-h-56 w-full shrink-0 flex-col border-b border-border bg-sidebar md:h-screen md:max-h-none md:w-64 md:border-b-0 md:border-r">
         {/* Logo */}
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -265,7 +265,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-y-auto">
         {selectedSymbol ? (
           <StockDashboard symbol={selectedSymbol} />
         ) : (

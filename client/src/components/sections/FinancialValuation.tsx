@@ -2,6 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { translateFinancialTerm } from "@shared/financialTerms";
 import { formatReportDate } from "@shared/reportDates";
 import { Star, Lightbulb, Leaf, Users, TrendingUp, DollarSign } from "lucide-react";
@@ -196,26 +202,26 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
 
       {/* Research Reports */}
       {insights?.reports && insights.reports.length > 0 && (
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">리서치 리포트</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {insights.reports.slice(0, 5).map((report: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between p-2 rounded bg-secondary/30">
-                  <div className="min-w-0">
-                    <p className="text-sm truncate">{report.reportTitle || "제목 없음"}</p>
-                    <p className="text-xs text-muted-foreground">{report.provider || "N/A"}</p>
+        <Accordion type="single" collapsible className="rounded-md border border-border px-4">
+          <AccordionItem value="research-reports">
+            <AccordionTrigger>리서치 리포트</AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2">
+                {insights.reports.slice(0, 5).map((report: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded bg-secondary/30">
+                    <div className="min-w-0">
+                      <p className="text-sm truncate">{report.reportTitle || "제목 없음"}</p>
+                      <p className="text-xs text-muted-foreground">{report.provider || "N/A"}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                      {formatReportDate(report.reportDate)}
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                    {formatReportDate(report.reportDate)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
     </div>
   );

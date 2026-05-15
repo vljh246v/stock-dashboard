@@ -8,15 +8,14 @@ const stockDashboardSource = readFileSync(
 );
 
 describe("StockDashboard current UI contract", () => {
-  it("keeps the current compact dashboard labels and excludes the retired tab copy", () => {
+  it("keeps the consolidated dashboard tab labels and excludes retired top-level tabs", () => {
     for (const label of [
-      "개요",
-      "핵심 지표",
+      "핵심",
       "차트",
-      "재무",
-      "가이던스",
-      "공시",
-      "의견",
+      "재무/가이던스",
+      "ETF 정보",
+      "분석 의견",
+      "근거/추적",
       "뉴스",
     ]) {
       expect(stockDashboardSource).toMatch(
@@ -25,6 +24,12 @@ describe("StockDashboard current UI contract", () => {
     }
 
     for (const retiredLabel of [
+      "개요",
+      "핵심 지표",
+      "재무",
+      "가이던스",
+      "공시",
+      "의견 추적",
       "기업 개요",
       "기술적 분석",
       "재무/밸류에이션",
@@ -32,10 +37,13 @@ describe("StockDashboard current UI contract", () => {
       "투자 의견",
       "감성 분석",
     ]) {
-      expect(stockDashboardSource).not.toContain(retiredLabel);
+      expect(stockDashboardSource).not.toMatch(
+        new RegExp(`>\\s*${retiredLabel}\\s*</TabsTrigger>`)
+      );
     }
 
-    expect(stockDashboardSource).toContain('<Tabs defaultValue="metrics"');
+    expect(stockDashboardSource).toContain('value={activeTab}');
     expect(stockDashboardSource).toContain("DecisionSummaryCard");
+    expect(stockDashboardSource).toContain("EvidenceOverview");
   });
 });
