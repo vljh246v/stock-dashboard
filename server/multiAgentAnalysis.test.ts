@@ -3,6 +3,7 @@ import { invokeLLM } from "./_core/llm";
 import * as db from "./db";
 import { generateMultiAgentOpinion } from "./multiAgentAnalysis";
 import type { AnalysisPack, GuidanceEvidenceMetric } from "./analysisPack";
+import type { AnalysisMetrics, FinancialMetric, MetricFreshness } from "@shared/analysisMetrics";
 
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn(),
@@ -55,7 +56,8 @@ const chartData = {
 
 function makeAnalysisPack(
   guidanceEvidence: GuidanceEvidenceMetric[] = [],
-  guidanceHighlights: string[] = []
+  guidanceHighlights: string[] = [],
+  metrics: AnalysisMetrics = makeMetrics()
 ): AnalysisPack {
   return {
     symbol: "AAPL",
@@ -90,7 +92,7 @@ function makeAnalysisPack(
     guidance: {
       evidence: guidanceEvidence,
     },
-    metrics: {} as AnalysisPack["metrics"],
+    metrics,
     governance: {
       qualitySignals: ["혁신 80점", "지속가능성 60점"],
       insiderTransactions: ["내부자 심리 55점"],
@@ -108,6 +110,151 @@ function makeAnalysisPack(
       sentiment: { highlights: ["제품 뉴스 긍정"] },
     },
     sources: [{ name: "Yahoo quoteSummary", status: "used" }],
+  };
+}
+
+function availableMetric(
+  id: string,
+  labelKo: string,
+  value: string,
+  basis: string,
+  freshness: MetricFreshness,
+  descriptionKo = labelKo
+): FinancialMetric {
+  return {
+    id,
+    labelKo,
+    descriptionKo,
+    status: "available",
+    value,
+    source: { name: "Yahoo quoteSummary", basis },
+    freshness,
+  };
+}
+
+function unavailableMetric(
+  id: string,
+  labelKo: string,
+  unavailableDetailKo: string,
+  basis: string,
+  descriptionKo = labelKo
+): FinancialMetric {
+  return {
+    id,
+    labelKo,
+    descriptionKo,
+    status: "unavailable",
+    unavailableReason: "missing_source",
+    unavailableDetailKo,
+    expectedSource: { name: "Yahoo quoteSummary", basis },
+  };
+}
+
+function makeMetrics(): AnalysisMetrics {
+  return {
+    assetType: "stock",
+    generatedAt: "2026-05-16T00:00:00.000Z",
+    groups: [
+      {
+        id: "valuation",
+        labelKo: "가치 평가",
+        descriptionKo: "가치 평가 지표",
+        metrics: [
+          availableMetric("per", "PER", "28.4배", "summaryDetail.trailingPE", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "quoteSummary 조회",
+          }, "주가수익비율"),
+          availableMetric("pbr", "PBR", "12.1배", "defaultKeyStatistics.priceToBook", {
+            kind: "as_of",
+            asOf: "2026-05-15",
+          }, "주가순자산비율"),
+          availableMetric("marketCap", "시가총액", "$2.9T", "price.marketCap", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "장중 데이터",
+          }, "시장 가치"),
+        ],
+      },
+      {
+        id: "profitability",
+        labelKo: "수익성",
+        descriptionKo: "수익성 지표",
+        metrics: [
+          availableMetric("roe", "ROE", "135.0%", "financialData.returnOnEquity", {
+            kind: "as_of",
+            asOf: "2025-12-31",
+          }, "자기자본이익률"),
+          availableMetric("operatingMargin", "영업이익률", "31.5%", "financialData.operatingMargins", {
+            kind: "as_of",
+            asOf: "2025-12-31",
+          }, "영업 마진"),
+          availableMetric("netMargin", "순이익률", "26.4%", "financialData.profitMargins", {
+            kind: "as_of",
+            asOf: "2025-12-31",
+          }, "순이익 마진"),
+          availableMetric("freeCashFlow", "FCF", "$99.6B", "financialData.freeCashflow", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "financialData 조회",
+          }, "잉여현금흐름"),
+        ],
+      },
+      {
+        id: "growth",
+        labelKo: "성장",
+        descriptionKo: "성장 지표",
+        metrics: [
+          availableMetric("revenueGrowth", "매출 성장률", "6.2%", "financialData.revenueGrowth", {
+            kind: "as_of",
+            asOf: "2025-12-31",
+          }, "매출 성장"),
+          unavailableMetric("profitGrowth", "이익 성장률", "999% 같은 미검증 값은 쓰지 않음", "earningsGrowth", "이익 성장"),
+        ],
+      },
+      {
+        id: "risk",
+        labelKo: "위험/가격 범위",
+        descriptionKo: "리스크 지표",
+        metrics: [
+          availableMetric("debtRatio", "부채비율", "145.2%", "financialData.debtToEquity", {
+            kind: "as_of",
+            asOf: "2025-12-31",
+          }, "부채 비율"),
+          availableMetric("beta", "베타", "1.22", "summaryDetail.beta", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "summaryDetail 조회",
+          }, "시장 민감도"),
+          availableMetric("fiftyTwoWeekHigh", "52주 고가", "$199.00", "summaryDetail.fiftyTwoWeekHigh", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "summaryDetail 조회",
+          }, "52주 고점"),
+          availableMetric("fiftyTwoWeekLow", "52주 저가", "$150.00", "summaryDetail.fiftyTwoWeekLow", {
+            kind: "checked_at",
+            checkedAt: "2026-05-16",
+            note: "summaryDetail 조회",
+          }, "52주 저점"),
+        ],
+      },
+      {
+        id: "shareholder",
+        labelKo: "주주 환원",
+        descriptionKo: "주주 환원 지표",
+        metrics: [
+          availableMetric("dividendYield", "배당수익률", "0.5%", "summaryDetail.dividendYield", {
+            kind: "not_material",
+            note: "배당 미중심 성장주",
+          }, "배당 수익률"),
+        ],
+      },
+    ],
+    dataQuality: {
+      available: 13,
+      unavailable: 1,
+      total: 14,
+    },
   };
 }
 
@@ -157,10 +304,10 @@ describe("generateMultiAgentOpinion fallback", () => {
   it("uses a cache key that does not reuse old agent-error opinion cache", async () => {
     await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
 
-    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v11_quality_sector_trust");
+    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v12_metric_context");
     expect(db.setCachedData).toHaveBeenCalledWith(
       "AAPL",
-      "llm_multi_opinion_v11_quality_sector_trust",
+      "llm_multi_opinion_v12_metric_context",
       expect.any(Object),
       120
     );
@@ -172,7 +319,7 @@ describe("generateMultiAgentOpinion fallback", () => {
     expect(db.createOpinionSnapshotWithPendingOutcomes).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: "AAPL",
-        opinionVersion: "llm_multi_opinion_v10_guidance_evidence",
+        opinionVersion: "llm_multi_opinion_v12_metric_context",
         finalSignal: expect.any(String),
         finalConfidence: expect.any(String),
         startObservedDate: expect.any(Date),
@@ -245,7 +392,7 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
   it("does not create a tracking snapshot when returning cached opinion", async () => {
     vi.mocked(db.getCachedData).mockResolvedValueOnce({
       generatedAt: "2026-01-01T00:00:00.000Z",
-      opinionVersion: "llm_multi_opinion_v10_guidance_evidence",
+      opinionVersion: "llm_multi_opinion_v12_metric_context",
       agents: [],
       workflow: {
         source: "TradingAgents-style research report",
@@ -324,6 +471,73 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
     expect(fundamentalPrompt).toContain("채용 70점");
     expect(fundamentalPrompt).not.toContain("섹터 평균");
     expect(fundamentalPrompt).not.toMatch(/섹터 평균:.*50점/);
+  });
+
+  it("passes source-backed core metrics to the portfolio manager", async () => {
+    const analysisPack = makeAnalysisPack();
+
+    await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData, {
+      analysisPack,
+    });
+
+    const portfolioPrompt = String(vi.mocked(invokeLLM).mock.calls[7]?.[0].messages[1].content);
+
+    expect(portfolioPrompt).toContain("핵심 지표");
+    expect(portfolioPrompt).toContain("PER: 28.4배 · 출처 Yahoo quoteSummary/summaryDetail.trailingPE");
+    expect(portfolioPrompt).toContain("신선도 확인 2026-05-16");
+    expect(portfolioPrompt).toContain("ROE: 135.0% · 출처 Yahoo quoteSummary/financialData.returnOnEquity");
+    expect(portfolioPrompt).toContain("순이익률: 26.4%");
+    expect(portfolioPrompt).toContain("FCF: $99.6B");
+    expect(portfolioPrompt).toContain("매출 성장률: 6.2%");
+    expect(portfolioPrompt).toContain("부채비율: 145.2%");
+    expect(portfolioPrompt).toContain("베타: 1.22");
+    expect(portfolioPrompt).toContain("배당수익률: 0.5% · 출처 Yahoo quoteSummary/summaryDetail.dividendYield · 신선도 배당 미중심 성장주");
+    expect(portfolioPrompt).not.toContain("이익 성장률");
+    expect(portfolioPrompt).not.toContain("999% 같은 미검증 값");
+  });
+
+  it("passes only fundamental metric context to the fundamental analyst", async () => {
+    const analysisPack = makeAnalysisPack();
+
+    await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData, {
+      analysisPack,
+    });
+
+    const fundamentalPrompt = String(vi.mocked(invokeLLM).mock.calls[1]?.[0].messages[1].content);
+
+    expect(fundamentalPrompt).toContain("## 핵심 지표");
+    expect(fundamentalPrompt).toContain("PER: 28.4배");
+    expect(fundamentalPrompt).toContain("시가총액: $2.9T");
+    expect(fundamentalPrompt).toContain("ROE: 135.0%");
+    expect(fundamentalPrompt).toContain("순이익률: 26.4%");
+    expect(fundamentalPrompt).toContain("FCF: $99.6B");
+    expect(fundamentalPrompt).toContain("매출 성장률: 6.2%");
+    expect(fundamentalPrompt).toContain("배당수익률: 0.5%");
+    expect(fundamentalPrompt).not.toContain("베타: 1.22");
+    expect(fundamentalPrompt).not.toContain("부채비율: 145.2%");
+    expect(fundamentalPrompt).not.toContain("52주 고가: $199.00");
+    expect(fundamentalPrompt).not.toContain("999% 같은 미검증 값");
+  });
+
+  it("passes risk metrics and price controls to the risk manager", async () => {
+    const analysisPack = makeAnalysisPack();
+
+    await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData, {
+      analysisPack,
+    });
+
+    const riskPrompt = String(vi.mocked(invokeLLM).mock.calls[6]?.[0].messages[1].content);
+
+    expect(riskPrompt).toContain("- 현재가: 185.5");
+    expect(riskPrompt).toContain("- 손절가: 174");
+    expect(riskPrompt).toContain("## 핵심 리스크 지표");
+    expect(riskPrompt).toContain("부채비율: 145.2%");
+    expect(riskPrompt).toContain("베타: 1.22");
+    expect(riskPrompt).toContain("52주 고가: $199.00");
+    expect(riskPrompt).toContain("52주 저가: $150.00");
+    expect(riskPrompt).not.toContain("ROE: 135.0%");
+    expect(riskPrompt).not.toContain("매출 성장률: 6.2%");
+    expect(riskPrompt).not.toContain("999% 같은 미검증 값");
   });
 
   it("passes verified guidance evidence and anti-invention rules to the portfolio manager", async () => {

@@ -4,9 +4,10 @@ import { createOpinionSnapshotWithPendingOutcomes, getCachedData, setCachedData 
 import { OPINION_TRACKING_VERSION, selectOpinionBaselineClose } from "./opinionTracking";
 import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
 import { isTrustedQualitySectorComparison } from "@shared/qualitySectorComparison";
+import type { AnalysisMetrics, MetricFreshness } from "@shared/analysisMetrics";
 
 const CACHE_TTL_OPINION = 120; // 2 hours
-const CACHE_VERSION = "_v11_quality_sector_trust";
+const CACHE_VERSION = "_v12_metric_context";
 
 type Signal = "매수" | "보유" | "매도";
 type Confidence = "높음" | "중간" | "낮음";
@@ -274,6 +275,48 @@ function sourceStatusLabel(status: AnalysisPack["sources"][number]["status"]): s
   return "사용 불가";
 }
 
+function metricFreshnessLabel(freshness: MetricFreshness): string {
+  if (freshness.kind === "checked_at") {
+    return freshness.note ? `확인 ${freshness.checkedAt} (${freshness.note})` : `확인 ${freshness.checkedAt}`;
+  }
+  if (freshness.kind === "as_of") return `기준 ${freshness.asOf}`;
+  return freshness.note;
+}
+
+function formatMetricContextLines(
+  metrics: Partial<AnalysisMetrics> | null | undefined,
+  allowGroupsOrIds: readonly string[],
+  limit = 8
+): string[] {
+  if (!Array.isArray(metrics?.groups)) return [];
+
+  const allowSet = new Set(allowGroupsOrIds);
+  const allowAll = allowSet.size === 0;
+  const lines: string[] = [];
+
+  for (const group of metrics.groups) {
+    const groupAllowed = allowAll || allowSet.has(group.id);
+    for (const metric of group.metrics) {
+      if (!groupAllowed && !allowSet.has(metric.id)) continue;
+      if (metric.status !== "available") continue;
+
+      lines.push(`- ${metric.labelKo}: ${metric.value} · 출처 ${metric.source.name}/${metric.source.basis} · 신선도 ${metricFreshnessLabel(metric.freshness)}`);
+      if (lines.length >= limit) return lines;
+    }
+  }
+
+  return lines;
+}
+
+function metricContextBlock(title: string, lines: string[]): string {
+  return lines.length > 0 ? `\n\n## ${title}\n${lines.join("\n")}` : "";
+}
+
+function portfolioMetricAllowlist(pack: AnalysisPack): readonly string[] {
+  if (pack.asset.assetType === "etf") return ["cost", "holdings", "range"];
+  return ["valuation", "profitability", "growth", "risk", "shareholder"];
+}
+
 function agentContext(agent: AgentResult): string {
   return `${agent.agentName}: ${agent.signal}/${agent.confidence}. ${agent.reasoning} 핵심: ${agent.keyPoints.join(", ")}`;
 }
@@ -307,16 +350,18 @@ function formatGuidanceEvidenceLines(pack: AnalysisPack, max = 5): string[] {
 }
 
 function packContext(pack: AnalysisPack): string {
+  const metricLines = formatMetricContextLines(pack.metrics, portfolioMetricAllowlist(pack), 16);
   const lines = [
     `자산: ${pack.asset.assetType} · ${pack.asset.displayName}`,
     `가격: 현재가 ${pack.price.current ?? "N/A"}, 52주 고점 ${pack.price.fiftyTwoWeekHigh ?? "N/A"}, 52주 저점 ${pack.price.fiftyTwoWeekLow ?? "N/A"}`,
     `기술: ${pack.technical.summary}; ${pack.technical.outlooks.join(", ") || "N/A"}`,
     `밸류에이션: ${pack.valuation.summary}`,
+    metricLines.length > 0 ? `핵심 지표:\n${metricLines.join("\n")}` : null,
     ...formatGuidanceEvidenceLines(pack),
     `뉴스/이벤트: ${pack.news.events.map(event => event.headline).slice(0, 4).join("; ") || "N/A"}`,
     `공시: ${pack.filings.latest.slice(0, 3).join("; ") || "N/A"}`,
     `보유/거버넌스: ${pack.governance.qualitySignals.concat(pack.governance.insiderTransactions).slice(0, 5).join("; ") || "N/A"}`,
-  ];
+  ].filter((line): line is string => typeof line === "string");
 
   if (pack.etf) {
     lines.push(`ETF: 보수 ${pack.etf.expenseRatio ?? "N/A"}, AUM ${pack.etf.netAssets ?? "N/A"}, 회전율 ${pack.etf.turnover ?? "N/A"}, 상위 보유 비중 ${pack.etf.topHoldingsWeight ?? "N/A"}%`);
@@ -667,12 +712,17 @@ async function runMarketAgent(symbol: string, data: UnwrappedData): Promise<Agen
   );
 }
 
-async function runFundamentalAgent(symbol: string, data: UnwrappedData): Promise<AgentResult> {
+async function runFundamentalAgent(symbol: string, data: UnwrappedData, analysisPack: AnalysisPack): Promise<AgentResult> {
   const fallback = buildFundamentalFallback(symbol, data);
   const valuation = localizedTerm(data.valuation?.description);
   const relativeValue = localizedTerm(data.valuation?.relativeValue);
   const rating = localizedTerm(data.recommendation?.rating);
   const sectorPromptLine = qualitySectorPromptLine(data.sectorSnapshot);
+  const metricLines = formatMetricContextLines(
+    analysisPack.metrics,
+    analysisPack.asset.assetType === "etf" ? ["cost", "holdings"] : ["valuation", "profitability", "growth", "shareholder"],
+    12
+  );
   const prompt = `TradingAgents의 Analyst Team 중 펀더멘털 분석가 역할입니다.
 절대 사실을 지어내지 말고 제공 데이터만 사용하세요.
 
@@ -680,7 +730,7 @@ async function runFundamentalAgent(symbol: string, data: UnwrappedData): Promise
 - 밸류에이션: ${valuation}, 할인율: ${data.valuation?.discount || "N/A"}, 상대가치: ${relativeValue}
 - 애널리스트 추천: ${rating}, 목표가 ${data.recommendation?.targetPrice || "N/A"}, 애널리스트 수 ${data.recommendation?.numberOfAnalysts || "N/A"}
 - 현재가: ${data.currentPrice ?? "N/A"}
-- 기업 품질: 혁신 ${formattedScore(data.companySnapshot?.innovativeness)}, 채용 ${formattedScore(data.companySnapshot?.hiring)}, 지속가능성 ${formattedScore(data.companySnapshot?.sustainability)}, 내부자 심리 ${formattedScore(data.companySnapshot?.insiderSentiments)}${sectorPromptLine ? `\n${sectorPromptLine}` : ""}`;
+- 기업 품질: 혁신 ${formattedScore(data.companySnapshot?.innovativeness)}, 채용 ${formattedScore(data.companySnapshot?.hiring)}, 지속가능성 ${formattedScore(data.companySnapshot?.sustainability)}, 내부자 심리 ${formattedScore(data.companySnapshot?.insiderSentiments)}${sectorPromptLine ? `\n${sectorPromptLine}` : ""}${metricContextBlock("핵심 지표", metricLines)}`;
 
   return runAgent(
     "펀더멘털 분석",
@@ -794,18 +844,26 @@ async function runRiskManager(
   data: UnwrappedData,
   analysts: AgentResult[],
   trader: AgentResult,
-  bear: AgentResult
+  bear: AgentResult,
+  analysisPack: AnalysisPack
 ): Promise<AgentResult> {
   const fallback = buildRiskFallback(symbol, data, trader);
   const valuation = localizedTerm(data.valuation?.description);
+  const currentPrice = data.currentPrice ?? analysisPack.price.current ?? "N/A";
+  const stopLoss = data.keyTechnicals?.stopLoss ?? analysisPack.price.stopLoss ?? "N/A";
+  const metricLines = formatMetricContextLines(
+    analysisPack.metrics,
+    ["debtRatio", "beta", "fiftyTwoWeekHigh", "fiftyTwoWeekLow"],
+    6
+  );
   const prompt = `TradingAgents의 Risk Management 역할입니다.
 트레이더 제안을 공격적/중립/보수 관점으로 검토한 뒤 리스크 조정 의견을 내세요. 제공된 분석 안에서만 판단하세요.
 
 ## ${symbol} 리스크 데이터
-- 현재가: ${data.currentPrice ?? "N/A"}
+- 현재가: ${currentPrice}
 - 밸류에이션: ${valuation}
-- 손절가: ${data.keyTechnicals?.stopLoss || "N/A"}
-- 내부자 심리: ${data.companySnapshot?.insiderSentiments ?? "N/A"}
+- 손절가: ${stopLoss}
+- 내부자 심리: ${data.companySnapshot?.insiderSentiments ?? "N/A"}${metricContextBlock("핵심 리스크 지표", metricLines)}
 
 ## 분석팀 보고서
 ${analysts.map(agentContext).join("\n")}
@@ -898,13 +956,13 @@ export async function generateMultiAgentOpinion(
   });
 
   const market = await runMarketAgent(symbol, data);
-  const fundamentals = await runFundamentalAgent(symbol, data);
+  const fundamentals = await runFundamentalAgent(symbol, data, analysisPack);
   const news = await runNewsAgent(symbol, data);
   const analystTeam = [market, fundamentals, news];
   const bull = await runBullResearcher(symbol, analystTeam);
   const bear = await runBearResearcher(symbol, data, analystTeam, bull);
   const trader = await runTrader(symbol, analystTeam, bull, bear);
-  const risk = await runRiskManager(symbol, data, analystTeam, trader, bear);
+  const risk = await runRiskManager(symbol, data, analystTeam, trader, bear, analysisPack);
   const prePortfolioAgents = [...analystTeam, bull, bear, trader, risk];
   const finalVerdict = await runPortfolioManager(symbol, prePortfolioAgents, analysisPack);
   const portfolioManager = buildPortfolioAgent(finalVerdict);

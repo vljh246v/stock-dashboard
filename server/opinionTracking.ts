@@ -4,7 +4,7 @@ export type OpinionTrackingHorizon = "1m" | "3m";
 export type OpinionTrackingStatus = "pending" | "resolved" | "unavailable";
 export type OpinionAlignment = "방향 일치" | "보합권" | "방향 차이" | "수집 중" | "데이터 부족";
 
-export const OPINION_TRACKING_VERSION = "llm_multi_opinion_v10_guidance_evidence";
+export const OPINION_TRACKING_VERSION = "llm_multi_opinion_v12_metric_context";
 export const OPINION_TRACKING_HORIZONS: OpinionTrackingHorizon[] = ["1m", "3m"];
 export const PROHIBITED_TRUST_COPY = ["적중률", "수익 보장", "AI가 맞췄", "추천 성과"];
 
