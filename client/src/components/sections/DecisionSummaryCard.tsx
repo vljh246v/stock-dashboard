@@ -141,7 +141,7 @@ export default function DecisionSummaryCard({ summary, isLoading }: Props) {
           <div className="flex items-center gap-2 min-w-0">
             <Database className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              근거: {activeSources.length > 0 ? activeSources.map(source => `${source.name}(${statusLabel[source.status]})`).join(", ") : "확인된 근거 없음"}
+              자료 상태: {activeSources.length > 0 ? activeSources.map(source => `${source.name}(${statusLabel[source.status]})`).join(", ") : "확인된 출처 없음"}
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">

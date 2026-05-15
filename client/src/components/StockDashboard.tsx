@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, Database, FileText, History, Loader2 } from "lucide-react";
+import { AlertCircle, Database, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,10 @@ import GuidanceSection from "./sections/GuidanceSection";
 import ETFSection from "./sections/ETFSection";
 import FilingsSection from "./sections/FilingsSection";
 import InvestmentOpinion from "./sections/InvestmentOpinion";
-import OpinionTrackingTable from "./sections/OpinionTrackingTable";
+import OpinionTrackingSection from "./sections/OpinionTrackingSection";
 import SentimentSection from "./sections/SentimentSection";
 import DecisionSummaryCard from "./sections/DecisionSummaryCard";
+import EvidenceTabOverview from "./sections/EvidenceTabOverview";
 
 interface StockDashboardProps {
   symbol: string;
@@ -57,7 +58,7 @@ function EvidenceSummaryCard({
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Database className="h-4 w-4 text-primary" />
-            자료 출처
+            자료 상태
           </div>
           <p className="truncate text-xs text-muted-foreground">
             {activeSources.length > 0
@@ -67,7 +68,7 @@ function EvidenceSummaryCard({
                       `${source.name}(${sourceStatusLabel[source.status]})`
                   )
                   .join(", ")
-              : "확인된 근거 없음"}
+              : "확인된 출처 상태 없음"}
           </p>
         </div>
         <Button
@@ -77,69 +78,10 @@ function EvidenceSummaryCard({
           className="shrink-0"
           onClick={onOpenEvidence}
         >
-          근거 보기
+          출처 상태 보기
         </Button>
       </CardContent>
     </Card>
-  );
-}
-
-function EvidenceOverview({
-  hasFilings,
-  sources,
-}: {
-  hasFilings: boolean;
-  sources?: AnalysisSource[];
-}) {
-  const activeSources = (sources || []).filter(
-    source => source.status !== "unavailable"
-  );
-
-  return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
-            <History className="h-4 w-4 text-primary" />
-            판단 기록
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            이전 판단과 1개월/3개월 뒤 가격 변화를 함께 보여줍니다.
-          </p>
-        </CardContent>
-      </Card>
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
-            <FileText className="h-4 w-4 text-primary" />
-            공시
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {hasFilings
-              ? "SEC 공시와 주요 이벤트를 한곳에서 확인합니다."
-              : "개별 기업 공시가 없는 자산은 자료 출처 중심으로 확인합니다."}
-          </p>
-        </CardContent>
-      </Card>
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="mb-1 flex items-center gap-2 text-sm font-medium">
-            <Database className="h-4 w-4 text-primary" />
-            자료 출처
-          </div>
-          <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {activeSources.length > 0
-              ? activeSources
-                  .map(
-                    source =>
-                      `${source.name}(${sourceStatusLabel[source.status]})`
-                  )
-                  .join(", ")
-              : "확인된 근거 없음"}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
@@ -373,16 +315,21 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
             sources={analysisPackQuery.data?.pack.sources}
             onOpenEvidence={() => setActiveTab("evidence")}
           />
+          <OpinionTrackingSection
+            tracking={opinionTrackingQuery.data}
+            isLoading={opinionTrackingQuery.isLoading}
+          />
         </TabsContent>
 
         <TabsContent value="evidence" className="mt-4 space-y-4">
-          <EvidenceOverview
+          <EvidenceTabOverview
             hasFilings={!isETF}
+            isETF={isETF}
             sources={analysisPackQuery.data?.pack.sources}
-          />
-          <OpinionTrackingTable
-            tracking={opinionTrackingQuery.data}
-            isLoading={opinionTrackingQuery.isLoading}
+            guidanceEvidence={analysisPackQuery.data?.pack.guidance.evidence}
+            metrics={analysisPackQuery.data?.pack.metrics}
+            etf={analysisPackQuery.data?.pack.etf}
+            price={analysisPackQuery.data?.pack.price}
           />
           {!isETF && (
             <FilingsSection

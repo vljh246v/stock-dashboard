@@ -3,12 +3,34 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import OpinionTrackingTable from "../client/src/components/sections/OpinionTrackingTable";
+import OpinionTrackingSection from "../client/src/components/sections/OpinionTrackingSection";
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 const prohibited = /적중률|수익 보장|AI가 맞췄|추천 성과/;
 
 describe("OpinionTrackingTable", () => {
+  it("wraps server copy as post-judgment tracking, not current evidence", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(OpinionTrackingSection, {
+        isLoading: false,
+        tracking: {
+          rows: [],
+          copy: {
+            title: "판단 기록",
+            description: "서버에서 내려온 설명입니다.",
+            empty: "아직 비교할 데이터가 없습니다.",
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain("사후 판단 기록");
+    expect(html).toContain("현재 분석에 사용된 근거가 아니라");
+    expect(html).toContain("판단 기록");
+    expect(html).not.toMatch(prohibited);
+  });
+
   it("renders an honest collection state when no rows exist", () => {
     const html = renderToStaticMarkup(
       React.createElement(OpinionTrackingTable, {

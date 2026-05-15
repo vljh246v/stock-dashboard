@@ -6,6 +6,26 @@ const stockDashboardSource = readFileSync(
   resolve(import.meta.dirname, "../client/src/components/StockDashboard.tsx"),
   "utf-8"
 );
+const decisionSummarySource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../client/src/components/sections/DecisionSummaryCard.tsx"
+  ),
+  "utf-8"
+);
+
+function tabContentSource(value: string, nextValue: string) {
+  const start = stockDashboardSource.indexOf(
+    `<TabsContent value="${value}"`
+  );
+  const end = stockDashboardSource.indexOf(
+    `<TabsContent value="${nextValue}"`,
+    start + 1
+  );
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return stockDashboardSource.slice(start, end);
+}
 
 describe("StockDashboard current UI contract", () => {
   it("keeps the consolidated dashboard tab labels and excludes retired top-level tabs", () => {
@@ -46,6 +66,27 @@ describe("StockDashboard current UI contract", () => {
 
     expect(stockDashboardSource).toContain('value={activeTab}');
     expect(stockDashboardSource).toContain("DecisionSummaryCard");
-    expect(stockDashboardSource).toContain("EvidenceOverview");
+    expect(stockDashboardSource).toContain("EvidenceTabOverview");
+  });
+
+  it("separates current evidence, source status, raw references, and post-judgment tracking", () => {
+    const opinionTab = tabContentSource("opinion", "evidence");
+    const evidenceTab = tabContentSource("evidence", "sentiment");
+
+    expect(evidenceTab).toContain("EvidenceTabOverview");
+    expect(evidenceTab).not.toContain("OpinionTrackingTable");
+    expect(evidenceTab).not.toContain("OpinionTrackingSection");
+    expect(evidenceTab).toContain("guidanceEvidence=");
+    expect(evidenceTab).toContain("metrics=");
+    expect(evidenceTab).toContain("etf=");
+
+    expect(opinionTab).toContain("OpinionTrackingSection");
+    expect(opinionTab).toContain("InvestmentOpinion");
+    expect(opinionTab).not.toContain("FilingsSection");
+
+    expect(stockDashboardSource).toContain("출처 상태 보기");
+    expect(stockDashboardSource).not.toContain("근거 보기");
+    expect(decisionSummarySource).toContain("자료 상태:");
+    expect(decisionSummarySource).not.toContain("근거:");
   });
 });
