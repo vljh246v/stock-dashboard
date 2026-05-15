@@ -10,14 +10,28 @@ const stockProfile = {
           industry: "Consumer Electronics",
         },
         price: { shortName: "Apple Inc.", longName: "Apple Inc." },
+        summaryDetail: {
+          trailingPE: 28.4,
+          dividendYield: 0.0045,
+          marketCap: 2850000000000,
+          beta: 1.12,
+        },
+        defaultKeyStatistics: {
+          priceToBook: 42.1,
+          trailingEps: 6.43,
+        },
         financialData: {
           financialCurrency: "USD",
           totalRevenue: 391035000000,
           revenueGrowth: 0.061,
+          earningsGrowth: 0.094,
           ebitda: 134661000000,
           ebitdaMargins: 0.3444,
           operatingMargins: 0.3151,
           profitMargins: 0.2397,
+          returnOnEquity: 1.385,
+          debtToEquity: 145.2,
+          freeCashflow: 99584000000,
         },
         earningsHistory: {
           history: [
@@ -179,6 +193,55 @@ describe("generateAnalysisPack", () => {
     );
     expect(pack.news.events[0].headline).toContain("Apple launches");
     expect(pack.guidance.evidence.length).toBeGreaterThan(0);
+    expect(pack.metrics.assetType).toBe("stock");
+    expect(pack.metrics.dataQuality.total).toBe(15);
+    expect(pack.metrics.dataQuality.available).toBe(15);
+    expect(
+      pack.metrics.groups
+        .flatMap(group => group.metrics)
+        .map(metric => metric.id)
+    ).toEqual([
+      "per",
+      "pbr",
+      "marketCap",
+      "eps",
+      "roe",
+      "operatingMargin",
+      "netMargin",
+      "freeCashFlow",
+      "revenueGrowth",
+      "profitGrowth",
+      "debtRatio",
+      "beta",
+      "fiftyTwoWeekHigh",
+      "fiftyTwoWeekLow",
+      "dividendYield",
+    ]);
+    expect(
+      pack.metrics.groups
+        .flatMap(group => group.metrics)
+        .filter(metric => metric.status === "available")
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "per",
+          value: "28.4배",
+          source: expect.objectContaining({
+            name: "Yahoo quoteSummary.summaryDetail",
+            basis: "trailingPE",
+          }),
+          freshness: expect.objectContaining({ kind: "checked_at" }),
+        }),
+        expect.objectContaining({
+          id: "pbr",
+          value: "42.1배",
+        }),
+        expect.objectContaining({
+          id: "roe",
+          value: "138.5%",
+        }),
+      ])
+    );
     expect(pack.guidance.evidence).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -265,7 +328,86 @@ describe("generateAnalysisPack", () => {
     });
 
     expect(pack.guidance.evidence).toEqual([]);
+    const metricEntries = pack.metrics.groups.flatMap(group => group.metrics);
+    expect(metricEntries.map(metric => metric.id)).toEqual([
+      "per",
+      "pbr",
+      "marketCap",
+      "eps",
+      "roe",
+      "operatingMargin",
+      "netMargin",
+      "freeCashFlow",
+      "revenueGrowth",
+      "profitGrowth",
+      "debtRatio",
+      "beta",
+      "fiftyTwoWeekHigh",
+      "fiftyTwoWeekLow",
+      "dividendYield",
+    ]);
+    expect(metricEntries.every(metric => metric.status === "unavailable")).toBe(
+      true
+    );
+    expect(metricEntries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "per",
+          status: "unavailable",
+          unavailableReason: expect.stringMatching(
+            /missing_source|missing_value/
+          ),
+        }),
+      ])
+    );
     expect(pack.tabData.guidance.highlights.join(" ")).toContain("EPS $0.14");
+  });
+
+  it("keeps metric source labels aligned with the structured field that supplied the value", () => {
+    const pack = generateAnalysisPack({
+      symbol: "msft",
+      profile: {
+        quoteSummary: {
+          result: [
+            {
+              summaryProfile: { sector: "Technology" },
+              price: { shortName: "Microsoft" },
+              summaryDetail: { trailingPE: 31.2, beta: 0.94 },
+            },
+          ],
+        },
+      },
+      insights: null,
+      chart: {
+        chart: {
+          result: [{ meta: { instrumentType: "EQUITY" } }],
+        },
+      },
+      holders: null,
+      secFilings: null,
+      etfHoldings: null,
+    });
+
+    expect(pack.metrics.groups.flatMap(group => group.metrics)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "per",
+          status: "available",
+          source: {
+            name: "Yahoo quoteSummary.summaryDetail",
+            basis: "trailingPE",
+          },
+        }),
+        expect.objectContaining({
+          id: "beta",
+          status: "available",
+          source: {
+            name: "Yahoo quoteSummary.summaryDetail",
+            basis: "beta",
+          },
+        }),
+      ])
+    );
   });
 
   it("normalizes ETF profile, fee, and holdings data into the same shared pack", () => {
@@ -316,7 +458,76 @@ describe("generateAnalysisPack", () => {
     expect(pack.etf?.turnover).toBe("2.00%");
     expect(pack.etf?.netAssets).toBe("$404.5B");
     expect(pack.etf?.topHoldingsWeight).toBeCloseTo(13.6, 1);
+    const etfMetrics = pack.metrics.groups.flatMap(group => group.metrics);
+    expect(etfMetrics.map(metric => metric.id)).not.toContain("per");
+    expect(etfMetrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "topHoldingsWeight",
+          status: "available",
+          freshness: { kind: "as_of", asOf: "2026-03-31" },
+        }),
+      ])
+    );
     expect(pack.tabData.etf.highlights.join(" ")).toContain("상위 2개");
     expect(pack.tabData.financial.highlights.join(" ")).toContain("총보수율");
+  });
+
+  it("marks ETF holding concentration unavailable when holdings lack an as-of date", () => {
+    const pack = generateAnalysisPack({
+      symbol: "spy",
+      profile: {
+        quoteSummary: {
+          result: [
+            {
+              price: { shortName: "SPDR S&P 500 ETF" },
+              fundProfile: {
+                family: "SPDR",
+                categoryName: "Large Blend",
+                feesExpensesInvestment: {
+                  annualReportExpenseRatio: 0.00095,
+                },
+              },
+            },
+          ],
+        },
+      },
+      insights: null,
+      chart: {
+        chart: {
+          result: [
+            { meta: { regularMarketPrice: 520, instrumentType: "ETF" } },
+          ],
+        },
+      },
+      holders: null,
+      secFilings: null,
+      etfHoldings: {
+        source: "stockanalysis.com",
+        asOfDate: null,
+        holdings: [{ symbol: "MSFT", name: "Microsoft Corp", weight: 7.1 }],
+      },
+    });
+
+    expect(pack.etf?.topHoldingsWeight).toBeUndefined();
+    expect(pack.tabData.etf.highlights.join(" ")).not.toContain("상위");
+    expect(pack.metrics.groups.flatMap(group => group.metrics)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "topHoldingsWeight",
+          status: "unavailable",
+          unavailableReason: "missing_freshness",
+        }),
+      ])
+    );
+    expect(pack.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "ETF holdings",
+          status: "unavailable",
+          asOf: null,
+        }),
+      ])
+    );
   });
 });

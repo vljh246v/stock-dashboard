@@ -2,6 +2,8 @@ import {
   translateFinancialTerm,
   translateFinancialText,
 } from "@shared/financialTerms";
+import type { AnalysisMetrics } from "@shared/analysisMetrics";
+import { buildAnalysisMetrics } from "./financialMetrics";
 
 export type AssetType = "stock" | "etf" | "unknown";
 
@@ -57,6 +59,7 @@ export interface AnalysisPack {
   guidance: {
     evidence: GuidanceEvidenceMetric[];
   };
+  metrics: AnalysisMetrics;
   governance: {
     qualitySignals: string[];
     insiderTransactions: string[];
@@ -468,6 +471,9 @@ export function generateAnalysisPack(
   const holdings = Array.isArray(input.etfHoldings?.holdings)
     ? input.etfHoldings.holdings
     : [];
+  const hasEtfHoldingsFreshness =
+    typeof input.etfHoldings?.asOfDate === "string" &&
+    input.etfHoldings.asOfDate.trim().length > 0;
   const etf =
     assetType === "etf"
       ? {
@@ -475,7 +481,7 @@ export function generateAnalysisPack(
           turnover: formatPercent(fees.annualHoldingsTurnover),
           netAssets: formatAssets(fees.totalNetAssets),
           topHoldingsWeight:
-            holdings.length > 0
+            holdings.length > 0 && hasEtfHoldingsFreshness
               ? Number(
                   holdings
                     .reduce(
@@ -546,6 +552,14 @@ export function generateAnalysisPack(
     symbol;
   const guidanceEvidence =
     assetType === "stock" ? buildGuidanceEvidence(profile) : [];
+  const generatedAt = new Date().toISOString();
+  const metrics = buildAnalysisMetrics({
+    assetType,
+    profile,
+    chart,
+    etfHoldings: input.etfHoldings,
+    generatedAt,
+  });
 
   const pack: AnalysisPack = {
     symbol,
@@ -585,6 +599,7 @@ export function generateAnalysisPack(
     guidance: {
       evidence: guidanceEvidence,
     },
+    metrics,
     governance: {
       qualitySignals: governanceSignals,
       insiderTransactions,
@@ -662,7 +677,7 @@ export function generateAnalysisPack(
         ? [
             source(
               "ETF holdings",
-              input.etfHoldings,
+              hasEtfHoldingsFreshness,
               input.etfHoldings?.asOfDate
             ),
           ]

@@ -12,7 +12,7 @@ const CACHE_TTL = {
 };
 
 const yahooFinance = new YahooFinance();
-const PROFILE_CACHE_KEY = "profile_v3_guidanceEvidence";
+const PROFILE_CACHE_KEY = "profile_v4_financialMetrics";
 
 const quoteSummary = (result: unknown) => ({
   quoteSummary: {
@@ -65,6 +65,8 @@ export async function getStockProfile(symbol: string) {
       modules: [
         "summaryProfile",
         "price",
+        "summaryDetail",
+        "defaultKeyStatistics",
         "quoteType",
         "fundProfile",
         "financialData",

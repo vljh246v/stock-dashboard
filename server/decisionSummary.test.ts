@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { generateDecisionSummary } from "./decisionSummary";
 
-const blockedPhrases = ["사세요", "파세요", "매수하세요", "매도하세요", "무조건", "보장"];
+const blockedPhrases = [
+  "사세요",
+  "파세요",
+  "매수하세요",
+  "매도하세요",
+  "무조건",
+  "보장",
+];
 
 const stockProfile = {
   quoteSummary: {
@@ -130,7 +137,9 @@ describe("generateDecisionSummary", () => {
     });
 
     expect(summary.assetType).toBe("stock");
-    expect(["interest", "wait", "caution", "unavailable"]).toContain(summary.state);
+    expect(["interest", "wait", "caution", "unavailable"]).toContain(
+      summary.state
+    );
     expect(["관심", "관망", "주의", "판단 보류"]).toContain(summary.labelKo);
     expect(summary.reasons.length).toBeGreaterThanOrEqual(3);
     expect(summary.riskNote.length).toBeGreaterThan(0);
@@ -161,7 +170,33 @@ describe("generateDecisionSummary", () => {
     });
     expect(Object.keys(summary.priceZones ?? {})).not.toContain("buyAt");
     expect(Object.keys(summary.priceZones ?? {})).not.toContain("sellAt");
-    expect(Object.keys(summary.priceZones ?? {})).not.toContain("stopLossOrder");
+    expect(Object.keys(summary.priceZones ?? {})).not.toContain(
+      "stopLossOrder"
+    );
+  });
+
+  it("does not derive support or stop-loss levels from current price alone", () => {
+    const summary = generateDecisionSummary({
+      symbol: "TSLA",
+      profile: stockProfile,
+      insights: {
+        finance: {
+          result: {
+            instrumentInfo: {
+              technicalEvents: {
+                shortTermOutlook: { direction: "Bullish", score: 5 },
+              },
+            },
+          },
+        },
+      },
+      chart: stockChart,
+      holders: null,
+      secFilings: null,
+      etfHoldings: null,
+    });
+
+    expect(summary.priceZones).toEqual({ source: "unavailable" });
   });
 
   it("returns a partial summary when insights are unavailable", () => {
@@ -177,8 +212,15 @@ describe("generateDecisionSummary", () => {
 
     expect(summary.state).toBe("unavailable");
     expect(summary.labelKo).toBe("판단 보류");
-    expect(summary.reasons.some(reason => reason.category === "data_quality")).toBe(true);
-    expect(summary.sources.some(source => source.name === "Yahoo insights" && source.status === "unavailable")).toBe(true);
+    expect(
+      summary.reasons.some(reason => reason.category === "data_quality")
+    ).toBe(true);
+    expect(
+      summary.sources.some(
+        source =>
+          source.name === "Yahoo insights" && source.status === "unavailable"
+      )
+    ).toBe(true);
   });
 
   it("summarizes ETF exposure when holdings are present and degrades when missing", () => {
@@ -201,11 +243,21 @@ describe("generateDecisionSummary", () => {
     });
 
     expect(withHoldings.assetType).toBe("etf");
-    expect(withHoldings.headline).toContain("비용과 구성 집중도가 상대적으로 부담이 낮게 보입니다.");
-    expect(withHoldings.reasons.some(reason => reason.label.includes("장기 비용"))).toBe(true);
-    expect(withHoldings.reasons.some(reason => reason.category === "etf_exposure")).toBe(true);
+    expect(withHoldings.headline).toContain(
+      "비용과 구성 집중도가 상대적으로 부담이 낮게 보입니다."
+    );
+    expect(
+      withHoldings.reasons.some(reason => reason.label.includes("장기 비용"))
+    ).toBe(true);
+    expect(
+      withHoldings.reasons.some(reason => reason.category === "etf_exposure")
+    ).toBe(true);
     expect(withHoldings.riskNote).toContain("보수");
-    expect(withHoldings.sources.some(source => source.name === "ETF holdings" && source.status === "used")).toBe(true);
+    expect(
+      withHoldings.sources.some(
+        source => source.name === "ETF holdings" && source.status === "used"
+      )
+    ).toBe(true);
 
     const withoutHoldings = generateDecisionSummary({
       symbol: "VOO",
@@ -218,8 +270,42 @@ describe("generateDecisionSummary", () => {
     });
 
     expect(withoutHoldings.assetType).toBe("etf");
-    expect(withoutHoldings.sources.some(source => source.name === "ETF holdings" && source.status === "unavailable")).toBe(true);
+    expect(
+      withoutHoldings.sources.some(
+        source =>
+          source.name === "ETF holdings" && source.status === "unavailable"
+      )
+    ).toBe(true);
     expect(withoutHoldings.state).not.toBe("interest");
+  });
+
+  it("does not use ETF holdings without an as-of date in decision scoring", () => {
+    const summary = generateDecisionSummary({
+      symbol: "VOO",
+      profile: etfProfile,
+      insights: null,
+      chart: etfChart,
+      holders: null,
+      secFilings: null,
+      etfHoldings: {
+        holdings: [
+          { symbol: "NVDA", name: "NVIDIA Corp.", weight: 42.5 },
+          { symbol: "AAPL", name: "Apple Inc.", weight: 22.1 },
+        ],
+        source: "stockanalysis.com",
+        asOfDate: null,
+      },
+    });
+
+    expect(summary.state).not.toBe("interest");
+    expect(flattenText(summary)).not.toContain("64.6%");
+    expect(flattenText(summary)).toContain("구성 종목 기준일이 없어");
+    expect(
+      summary.sources.some(
+        source =>
+          source.name === "ETF holdings" && source.status === "unavailable"
+      )
+    ).toBe(true);
   });
 
   it("uses numeric Yahoo ETF fee fields in the decision summary", () => {

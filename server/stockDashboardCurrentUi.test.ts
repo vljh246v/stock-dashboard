@@ -11,6 +11,7 @@ describe("StockDashboard current UI contract", () => {
   it("keeps the current compact dashboard labels and excludes the retired tab copy", () => {
     for (const label of [
       "개요",
+      "핵심 지표",
       "차트",
       "재무",
       "가이던스",
@@ -34,6 +35,7 @@ describe("StockDashboard current UI contract", () => {
       expect(stockDashboardSource).not.toContain(retiredLabel);
     }
 
+    expect(stockDashboardSource).toContain('<Tabs defaultValue="metrics"');
     expect(stockDashboardSource).toContain("DecisionSummaryCard");
   });
 });

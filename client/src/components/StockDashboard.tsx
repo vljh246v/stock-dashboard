@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateIndustry, translateSector } from "@/lib/stockLocalization";
 import CompanyOverview from "./sections/CompanyOverview";
+import CoreMetricsSection from "./sections/CoreMetricsSection";
 import TechnicalAnalysis from "./sections/TechnicalAnalysis";
 import FinancialValuation from "./sections/FinancialValuation";
 import GuidanceSection from "./sections/GuidanceSection";
@@ -150,8 +151,11 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
       />
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue="metrics" className="w-full">
         <TabsList className="bg-secondary border border-border w-full justify-start overflow-x-auto flex-nowrap">
+          <TabsTrigger value="metrics" className="text-xs">
+            핵심 지표
+          </TabsTrigger>
           <TabsTrigger value="overview" className="text-xs">
             개요
           </TabsTrigger>
@@ -193,6 +197,13 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
             data={profileData}
             isLoading={analysisPackQuery.isLoading}
             chartMeta={chartMeta}
+          />
+        </TabsContent>
+
+        <TabsContent value="metrics" className="mt-4">
+          <CoreMetricsSection
+            metrics={analysisPackQuery.data?.pack.metrics}
+            isLoading={analysisPackQuery.isLoading}
           />
         </TabsContent>
 
