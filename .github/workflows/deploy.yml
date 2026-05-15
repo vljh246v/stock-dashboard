@@ -201,7 +201,9 @@ jobs:
             exit 1
           fi
 
-          if ! curl --fail --show-error --silent --location http://127.0.0.1:3000/login >/tmp/stock-dashboard-login.html; then
+          if ! curl --fail --show-error --silent --location \
+            --retry 10 --retry-delay 2 --retry-connrefused \
+            http://127.0.0.1:3000/login >/tmp/stock-dashboard-login.html; then
             echo "stock-dashboard did not serve /login on 127.0.0.1:3000" >&2
             print_diagnostics
             exit 1
