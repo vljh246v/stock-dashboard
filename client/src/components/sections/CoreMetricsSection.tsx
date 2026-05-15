@@ -33,13 +33,35 @@ interface CoreMetricsSectionProps {
   isLoading?: boolean;
 }
 
-function freshnessLabel(freshness?: MetricFreshness) {
-  if (!freshness) return "기준 확인 불가";
-  if (freshness.kind === "as_of") return `기준일 ${freshness.asOf}`;
-  if (freshness.kind === "checked_at") {
-    return `확인 ${freshness.checkedAt.slice(0, 10)} · ${freshness.note}`;
+interface FreshnessDisplay {
+  label: string;
+  detail?: string;
+}
+
+function sourceNameParts(sourceName: string) {
+  if (sourceName.startsWith("Yahoo ")) {
+    return {
+      provider: "Yahoo",
+      dataset: sourceName.slice("Yahoo ".length),
+    };
   }
-  return freshness.note;
+
+  return {
+    provider: sourceName,
+    dataset: undefined,
+  };
+}
+
+function freshnessDisplay(freshness?: MetricFreshness): FreshnessDisplay {
+  if (!freshness) return { label: "기준 확인 불가" };
+  if (freshness.kind === "as_of") return { label: `기준일 ${freshness.asOf}` };
+  if (freshness.kind === "checked_at") {
+    return {
+      label: `응답 확인 ${freshness.checkedAt.slice(0, 10)}`,
+      detail: "API 작성일이나 로컬 캐시 시각과 다를 수 있습니다.",
+    };
+  }
+  return { label: freshness.note };
 }
 
 function reasonLabel(reason: MetricUnavailableReason) {
@@ -53,6 +75,10 @@ function reasonLabel(reason: MetricUnavailableReason) {
 
 function MetricHelpPopover({ metric }: { metric: FinancialMetric }) {
   const [open, setOpen] = useState(false);
+  const source =
+    metric.status === "available" ? metric.source : metric.expectedSource;
+  const sourceParts = source ? sourceNameParts(source.name) : undefined;
+  const freshness = freshnessDisplay(metric.freshness);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -69,29 +95,71 @@ function MetricHelpPopover({ metric }: { metric: FinancialMetric }) {
           <HelpCircle className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 text-sm leading-relaxed">
-        <div className="space-y-2">
+      <PopoverContent
+        align="start"
+        className="w-[22rem] max-w-[calc(100vw-2rem)] text-sm leading-relaxed"
+      >
+        <div className="space-y-3">
           <p className="font-medium text-foreground">{metric.labelKo}</p>
           <p className="text-muted-foreground">{metric.descriptionKo}</p>
-          {metric.status === "available" ? (
-            <p className="text-xs text-muted-foreground">
-              {metric.source.name} · {metric.source.basis} ·{" "}
-              {freshnessLabel(metric.freshness)}
-            </p>
-          ) : (
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>
-                {reasonLabel(metric.unavailableReason)} ·{" "}
+
+          <div className="rounded-md border border-border bg-muted/20 p-3 text-xs">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="font-medium text-foreground">검증 정보</p>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "h-5 px-1.5 text-[11px]",
+                  metric.status === "available"
+                    ? "border-emerald-500/40 text-emerald-600"
+                    : "text-muted-foreground"
+                )}
+              >
+                {metric.status === "available"
+                  ? "출처 확인"
+                  : reasonLabel(metric.unavailableReason)}
+              </Badge>
+            </div>
+
+            <dl className="space-y-1.5">
+              {sourceParts && (
+                <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2">
+                  <dt className="text-muted-foreground">원천</dt>
+                  <dd className="min-w-0 text-foreground">
+                    <span>{sourceParts.provider}</span>
+                    {sourceParts.dataset ? (
+                      <span className="block break-words font-mono text-muted-foreground">
+                        {sourceParts.dataset}
+                      </span>
+                    ) : null}
+                  </dd>
+                </div>
+              )}
+              {source && (
+                <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2">
+                  <dt className="text-muted-foreground">필드</dt>
+                  <dd className="min-w-0 break-words font-mono text-foreground">
+                    {source.basis}
+                  </dd>
+                </div>
+              )}
+              <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2">
+                <dt className="text-muted-foreground">기준</dt>
+                <dd className="min-w-0 text-foreground">{freshness.label}</dd>
+              </div>
+            </dl>
+
+            {metric.status === "unavailable" && (
+              <p className="mt-2 border-t border-border pt-2 text-muted-foreground">
                 {metric.unavailableDetailKo}
               </p>
-              {metric.expectedSource && (
-                <p>
-                  기대 출처: {metric.expectedSource.name} ·{" "}
-                  {metric.expectedSource.basis}
-                </p>
-              )}
-            </div>
-          )}
+            )}
+            {freshness.detail && (
+              <p className="mt-2 border-t border-border pt-2 text-muted-foreground">
+                {freshness.detail}
+              </p>
+            )}
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -229,8 +297,8 @@ export default function CoreMetricsSection({
           </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          행에는 값과 검증 상태만 간결히 표시합니다. 설명, 원천 API, 필드,
-          확인시각은 각 지표의 ?에서 확인할 수 있습니다.
+          행에는 값과 검증 상태만 간결히 표시합니다. 설명과 원천 필드는 각
+          지표의 ?에서 확인할 수 있습니다.
         </p>
       </CardHeader>
       <CardContent>

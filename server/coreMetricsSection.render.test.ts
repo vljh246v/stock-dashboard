@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -110,5 +111,21 @@ describe("CoreMetricsSection rendering", () => {
     expect(html).toContain("PER");
     expect(html).toContain('aria-label="PER 설명"');
     expect(html).not.toContain("주가를 주당순이익으로 나눈 값입니다.");
+  });
+
+  it("uses structured verification labels instead of repeating the verbose checked-at note", () => {
+    const source = readFileSync(
+      "client/src/components/sections/CoreMetricsSection.tsx",
+      "utf-8"
+    );
+
+    expect(source).toContain("검증 정보");
+    expect(source).toContain(
+      "API 작성일이나 로컬 캐시 시각과 다를 수 있습니다."
+    );
+    expect(source).not.toContain("{freshnessLabel(metric.freshness)}");
+    expect(source).not.toContain(
+      "{metric.source.name} · {metric.source.basis}"
+    );
   });
 });
