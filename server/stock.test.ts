@@ -10,6 +10,8 @@ const mockGetStockHolders = vi.fn();
 const mockGetStockSecFiling = vi.fn();
 const mockGetETFHoldings = vi.fn();
 const mockGenerateMultiAgentOpinion = vi.fn();
+const mockListRecentOpinionTracking = vi.fn();
+const mockUpdateOpinionOutcome = vi.fn();
 
 vi.mock("./stockData", () => ({
   getStockProfile: (...args: any[]) => mockGetStockProfile(...args),
@@ -57,6 +59,8 @@ vi.mock("./db", () => ({
   removeFromWatchlist: vi.fn().mockResolvedValue(undefined),
   getCachedData: vi.fn().mockResolvedValue(null),
   setCachedData: vi.fn().mockResolvedValue(undefined),
+  listRecentOpinionTracking: (...args: any[]) => mockListRecentOpinionTracking(...args),
+  updateOpinionOutcome: (...args: any[]) => mockUpdateOpinionOutcome(...args),
 }));
 
 function createPublicContext(): TrpcContext {
@@ -176,6 +180,13 @@ beforeEach(() => {
   mockGetStockHolders.mockResolvedValue(validHolders);
   mockGetStockSecFiling.mockResolvedValue(validSecFiling);
   mockGetETFHoldings.mockResolvedValue(null);
+  mockListRecentOpinionTracking.mockResolvedValue([]);
+  mockUpdateOpinionOutcome.mockImplementation(async (input) => ({
+    id: 1,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    resolvedAt: input.status === "resolved" ? new Date("2026-02-15T00:00:00.000Z") : null,
+    ...input,
+  }));
   mockGenerateMultiAgentOpinion.mockResolvedValue({
     agents: [
       { agentName: "기술적 분석", signal: "매수", confidence: "중간", reasoning: "단기 상승 추세", keyPoints: ["기술적 강세"] },
@@ -222,6 +233,7 @@ describe("stock.profile", () => {
       () => caller.stock.guidanceTranslation({ symbol: "AAPL" }),
       () => caller.stock.secFiling({ symbol: "AAPL" }),
       () => caller.stock.opinion({ symbol: "AAPL" }),
+      () => caller.stock.opinionTracking({ symbol: "AAPL" }),
       () => caller.stock.analysisPack({ symbol: "AAPL" }),
       () => caller.stock.decisionSummary({ symbol: "AAPL" }),
       () => caller.stock.etfHoldings({ symbol: "AAPL" }),
@@ -368,6 +380,72 @@ describe("stock.opinion", () => {
         analysisPack: expect.objectContaining({ symbol: "AAPL" }),
       })
     );
+  });
+});
+
+describe("stock.opinionTracking", () => {
+  it("normalizes symbol and returns tracking rows", async () => {
+    const caller = appRouter.createCaller(createAuthContext());
+
+    const result = await caller.stock.opinionTracking({ symbol: "apple" });
+
+    expect(result.symbol).toBe("AAPL");
+    expect(result.copy.description).toContain("역사적 일치");
+    expect(mockListRecentOpinionTracking).toHaveBeenCalledWith("AAPL", 1200, expect.any(Date));
+    expect(mockGetStockChart).not.toHaveBeenCalledWith("AAPL", "1d", "6mo");
+  });
+
+  it("resolves eligible pending outcomes from chart data", async () => {
+    mockGetStockChart.mockResolvedValue({
+      chart: {
+        result: [{
+          timestamp: [Date.UTC(2020, 1, 16) / 1000],
+          indicators: { quote: [{ close: [111] }] },
+        }],
+      },
+    });
+    mockListRecentOpinionTracking.mockResolvedValue([{
+      snapshot: {
+        id: 10,
+        symbol: "AAPL",
+        opinionCreatedAt: new Date("2020-01-15T00:00:00.000Z"),
+        opinionVersion: "test",
+        finalSignal: "매수",
+        finalConfidence: "중간",
+        startObservedDate: new Date("2020-01-15T00:00:00.000Z"),
+        startPrice: 100,
+        opinionPayload: {},
+        sourceSummary: {},
+        createdAt: new Date("2020-01-15T00:00:00.000Z"),
+      },
+      outcomes: [{
+        id: 20,
+        snapshotId: 10,
+        horizon: "1m",
+        targetDate: new Date("2020-02-15T00:00:00.000Z"),
+        observedDate: null,
+        observedPrice: null,
+        returnPct: null,
+        alignment: "수집 중",
+        status: "pending",
+        resolvedAt: null,
+        createdAt: new Date("2020-01-15T00:00:00.000Z"),
+      }],
+    }]);
+
+    const caller = appRouter.createCaller(createAuthContext());
+    const result = await caller.stock.opinionTracking({ symbol: "AAPL" });
+
+    expect(mockGetStockChart).toHaveBeenCalledWith("AAPL", "1d", "6mo");
+    expect(mockUpdateOpinionOutcome).toHaveBeenCalledWith(expect.objectContaining({
+      snapshotId: 10,
+      horizon: "1m",
+      status: "resolved",
+      observedPrice: 111,
+      returnPct: 11,
+      alignment: "방향 일치",
+    }));
+    expect((result.rows[0].outcomes[0] as any).status).toBe("resolved");
   });
 });
 

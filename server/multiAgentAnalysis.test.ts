@@ -8,6 +8,7 @@ vi.mock("./_core/llm", () => ({
 }));
 
 vi.mock("./db", () => ({
+  createOpinionSnapshotWithPendingOutcomes: vi.fn().mockResolvedValue(undefined),
   getCachedData: vi.fn().mockResolvedValue(null),
   setCachedData: vi.fn().mockResolvedValue(undefined),
 }));
@@ -105,6 +106,23 @@ describe("generateMultiAgentOpinion fallback", () => {
       120
     );
   });
+
+  it("records a tracking snapshot on fresh fallback generation", async () => {
+    await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
+
+    expect(db.createOpinionSnapshotWithPendingOutcomes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: "AAPL",
+        opinionVersion: "llm_multi_opinion_v9_score_confidence",
+        finalSignal: expect.any(String),
+        finalConfidence: expect.any(String),
+        startObservedDate: expect.any(Date),
+        startPrice: 185.5,
+        opinionPayload: expect.any(Object),
+        sourceSummary: expect.any(Object),
+      })
+    );
+  });
 });
 
 describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
@@ -163,6 +181,40 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
         keyFactors: ["기술 추세", "밸류에이션", "리스크 한도"],
         dissent: "Bull 리서처는 제한적 매수를 주장했습니다.",
       }) as any);
+  });
+
+  it("does not create a tracking snapshot when returning cached opinion", async () => {
+    vi.mocked(db.getCachedData).mockResolvedValueOnce({
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      opinionVersion: "llm_multi_opinion_v9_score_confidence",
+      agents: [],
+      workflow: {
+        source: "TradingAgents-style research report",
+        stages: [],
+      },
+      finalVerdict: {
+        signal: "보유",
+        confidence: "낮음",
+        summary: "cached",
+        bullCase: "",
+        bearCase: "",
+        keyFactors: [],
+        dissent: "",
+      },
+      researchReport: {
+        thesis: "",
+        sections: [],
+        dataQuality: [],
+        nextChecks: [],
+      },
+      disclaimer: "cached",
+    });
+
+    const result = await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
+
+    expect(result.finalVerdict.summary).toBe("cached");
+    expect(invokeLLM).not.toHaveBeenCalled();
+    expect(db.createOpinionSnapshotWithPendingOutcomes).not.toHaveBeenCalled();
   });
 
   it("runs analyst, researcher, trader, risk, and portfolio stages in order", async () => {

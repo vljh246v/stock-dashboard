@@ -18,10 +18,12 @@ import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_
 import { z } from "zod";
 import {
   approveUser,
+  listRecentOpinionTracking,
   getPendingUsers,
   getWatchlist,
   addToWatchlist,
   removeFromWatchlist,
+  updateOpinionOutcome,
 } from "./db";
 import {
   getStockProfile,
@@ -39,6 +41,14 @@ import {
   translateGuidanceData,
 } from "./llmAnalysis";
 import { generateMultiAgentOpinion } from "./multiAgentAnalysis";
+import {
+  addMonths,
+  resolveOutcomeFromChart,
+  type OpinionAlignment,
+  type OpinionSignal,
+  type OpinionTrackingHorizon,
+  type OpinionTrackingStatus,
+} from "./opinionTracking";
 
 function toPublicUser(user: {
   id: number;
@@ -124,6 +134,76 @@ async function buildDashboardAnalysis(symbol: string) {
     },
     pack,
     decisionSummary,
+  };
+}
+
+async function buildOpinionTracking(symbol: string) {
+  const records = await listRecentOpinionTracking(symbol, 1200, addMonths(new Date(), -4));
+  const hasResolvableOutcome = records.some(record =>
+    record.outcomes.some(outcome =>
+      outcome.status !== "resolved" && outcome.targetDate.getTime() <= Date.now()
+    )
+  );
+  const chart = hasResolvableOutcome ? await getStockChart(symbol, "1d", "6mo") : null;
+
+  const rows = [];
+  for (const record of records) {
+    const outcomes = [];
+    for (const outcome of record.outcomes) {
+      const resolved = chart
+        ? resolveOutcomeFromChart(
+            record.snapshot.finalSignal as OpinionSignal,
+            record.snapshot.startPrice,
+            {
+              snapshotId: outcome.snapshotId,
+              horizon: outcome.horizon as OpinionTrackingHorizon,
+              targetDate: outcome.targetDate,
+              status: outcome.status as OpinionTrackingStatus,
+              observedDate: outcome.observedDate,
+              observedPrice: outcome.observedPrice,
+              returnPct: outcome.returnPct,
+              alignment: outcome.alignment as OpinionAlignment,
+            },
+            chart
+          )
+        : outcome;
+
+      const shouldPersist =
+        resolved.status !== outcome.status ||
+        resolved.observedDate?.getTime() !== outcome.observedDate?.getTime() ||
+        resolved.observedPrice !== outcome.observedPrice ||
+        resolved.returnPct !== outcome.returnPct ||
+        resolved.alignment !== outcome.alignment;
+
+      const stored = shouldPersist
+        ? await updateOpinionOutcome({
+            snapshotId: resolved.snapshotId,
+            horizon: resolved.horizon as OpinionTrackingHorizon,
+            status: resolved.status as OpinionTrackingStatus,
+            observedDate: resolved.observedDate,
+            observedPrice: resolved.observedPrice,
+            returnPct: resolved.returnPct,
+            alignment: resolved.alignment as OpinionAlignment,
+          })
+        : outcome;
+
+      outcomes.push(stored ?? resolved);
+    }
+
+    rows.push({
+      snapshot: record.snapshot,
+      outcomes: outcomes.sort((a, b) => String(a.horizon).localeCompare(String(b.horizon))),
+    });
+  }
+
+  return {
+    symbol,
+    rows,
+    copy: {
+      title: "의견 추적",
+      description: "과거 AI 의견 방향과 이후 가격 흐름의 역사적 일치 여부를 수집합니다.",
+      empty: "아직 충분한 1개월/3개월 기록을 수집 중입니다.",
+    },
   };
 }
 
@@ -357,6 +437,12 @@ export const appRouter = router({
           analysis.raw.chart,
           { analysisPack: analysis.pack }
         );
+      }),
+
+    opinionTracking: protectedProcedure
+      .input(z.object({ symbol: z.string().min(1).max(20) }))
+      .query(async ({ input }) => {
+        return buildOpinionTracking(normalizeStockSymbol(input.symbol));
       }),
 
     // 공용 분석 데이터: 각 탭과 보고서가 같은 가공 결과를 공유

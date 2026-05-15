@@ -29,6 +29,13 @@
       "when": 1778792400000,
       "tag": "0003_user_approval_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1778821500000,
+      "tag": "0004_opinion_tracking",
+      "breakpoints": true
     }
   ]
 }

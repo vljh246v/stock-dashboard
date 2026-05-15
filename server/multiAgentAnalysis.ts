@@ -1,6 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 import { generateAnalysisPack, type AnalysisPack } from "./analysisPack";
-import { getCachedData, setCachedData } from "./db";
+import { createOpinionSnapshotWithPendingOutcomes, getCachedData, setCachedData } from "./db";
+import { OPINION_TRACKING_VERSION, selectOpinionBaselineClose } from "./opinionTracking";
 import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
 
 const CACHE_TTL_OPINION = 120; // 2 hours
@@ -41,6 +42,8 @@ interface ResearchReport {
 }
 
 interface MultiAgentOpinion {
+  generatedAt: string;
+  opinionVersion: string;
   agents: AgentResult[];
   workflow: {
     source: "TradingAgents-style research report";
@@ -843,6 +846,7 @@ export async function generateMultiAgentOpinion(
   const cached = await getCachedData(symbol, "llm_multi_opinion" + CACHE_VERSION);
   if (cached) return cached as MultiAgentOpinion;
 
+  const opinionCreatedAt = new Date();
   const data = unwrapData(profileData, insightsData, chartData);
   const analysisPack = options?.analysisPack || generateAnalysisPack({
     symbol,
@@ -868,6 +872,8 @@ export async function generateMultiAgentOpinion(
   const researchReport = buildResearchReport(symbol, analysisPack, prePortfolioAgents, finalVerdict);
 
   const opinion: MultiAgentOpinion = {
+    generatedAt: opinionCreatedAt.toISOString(),
+    opinionVersion: OPINION_TRACKING_VERSION,
     agents: [...prePortfolioAgents, portfolioManager],
     workflow: {
       source: "TradingAgents-style research report",
@@ -878,6 +884,42 @@ export async function generateMultiAgentOpinion(
     disclaimer: "본 분석은 AI가 공개 데이터를 기반으로 생성한 참고 정보이며, 실제 투자 결정의 근거로 사용해서는 안 됩니다. 투자에 따른 손실은 전적으로 투자자 본인에게 있습니다.",
   };
 
+  await recordOpinionSnapshot(symbol, opinionCreatedAt, chartData, opinion, analysisPack);
   await setCachedData(symbol, "llm_multi_opinion" + CACHE_VERSION, opinion, CACHE_TTL_OPINION);
   return opinion;
+}
+
+async function recordOpinionSnapshot(
+  symbol: string,
+  opinionCreatedAt: Date,
+  chartData: unknown,
+  opinion: MultiAgentOpinion,
+  analysisPack: AnalysisPack
+) {
+  const startClose = selectOpinionBaselineClose(chartData, opinionCreatedAt);
+  try {
+    await createOpinionSnapshotWithPendingOutcomes({
+      symbol,
+      opinionCreatedAt,
+      opinionVersion: OPINION_TRACKING_VERSION,
+      finalSignal: opinion.finalVerdict.signal,
+      finalConfidence: opinion.finalVerdict.confidence,
+      startObservedDate: startClose?.observedDate ?? null,
+      startPrice: startClose?.close ?? null,
+      opinionPayload: {
+        finalVerdict: opinion.finalVerdict,
+        agents: opinion.agents.map(agent => ({
+          agentName: agent.agentName,
+          signal: agent.signal,
+          confidence: agent.confidence,
+        })),
+      },
+      sourceSummary: {
+        sources: analysisPack.sources,
+        asset: analysisPack.asset,
+      },
+    });
+  } catch (error) {
+    console.error(`[OpinionTracking] Failed to record snapshot for ${symbol}:`, error);
+  }
 }

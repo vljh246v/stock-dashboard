@@ -1,14 +1,26 @@
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, desc, gt, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
+  type InsertOpinionTrackingOutcome,
+  type InsertOpinionTrackingSnapshot,
+  type OpinionTrackingOutcome,
+  type OpinionTrackingSnapshot,
   type User,
   type Watchlist,
+  opinionTrackingOutcomes,
+  opinionTrackingSnapshots,
   users,
   watchlist,
   stockAnalysisCache,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import {
+  createPendingOutcomes,
+  type OpinionAlignment,
+  type OpinionTrackingHorizon,
+  type OpinionTrackingStatus,
+} from "./opinionTracking";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let dbUnavailable = false;
@@ -21,12 +33,44 @@ type LocalCacheEntry = {
   expiresAt: Date;
 };
 
+export interface OpinionTrackingSnapshotInput {
+  symbol: string;
+  opinionCreatedAt: Date;
+  opinionVersion: string;
+  finalSignal: string;
+  finalConfidence: string;
+  startObservedDate: Date | null;
+  startPrice: number | null;
+  opinionPayload: unknown;
+  sourceSummary: unknown;
+}
+
+export interface OpinionTrackingOutcomeUpdate {
+  snapshotId: number;
+  horizon: OpinionTrackingHorizon;
+  status: OpinionTrackingStatus;
+  observedDate: Date | null;
+  observedPrice: number | null;
+  returnPct: number | null;
+  alignment: OpinionAlignment;
+  resolvedAt?: Date | null;
+}
+
+export interface OpinionTrackingRecord {
+  snapshot: OpinionTrackingSnapshot;
+  outcomes: OpinionTrackingOutcome[];
+}
+
 const localStore = {
   nextUserId: 1,
   nextWatchlistId: 1,
+  nextOpinionSnapshotId: 1,
+  nextOpinionOutcomeId: 1,
   users: [] as User[],
   watchlist: [] as Watchlist[],
   cache: [] as LocalCacheEntry[],
+  opinionSnapshots: [] as OpinionTrackingSnapshot[],
+  opinionOutcomes: [] as OpinionTrackingOutcome[],
 };
 
 function canUseLocalFallback() {
@@ -427,4 +471,256 @@ export async function setCachedData(symbol: string, dataType: string, data: unkn
     }
     throw error;
   }
+}
+
+// ===== Opinion Tracking Helpers =====
+
+export async function createOpinionSnapshotWithPendingOutcomes(input: OpinionTrackingSnapshotInput) {
+  const db = await getDb();
+  const normalized = normalizeTrackingInput(input);
+
+  if (!db) {
+    if (useLocalFallback("database not available")) {
+      const existing = findLocalOpinionSnapshot(normalized);
+      if (existing) return {
+        snapshot: existing,
+        outcomes: localStore.opinionOutcomes.filter(outcome => outcome.snapshotId === existing.id),
+      };
+
+      const now = new Date();
+      const snapshot: OpinionTrackingSnapshot = {
+        id: localStore.nextOpinionSnapshotId++,
+        ...normalized,
+        createdAt: now,
+      };
+      localStore.opinionSnapshots.push(snapshot);
+      const outcomes = createPendingOutcomes(snapshot.id, snapshot.opinionCreatedAt).map(outcome => {
+        const stored: OpinionTrackingOutcome = {
+          id: localStore.nextOpinionOutcomeId++,
+          snapshotId: snapshot.id,
+          horizon: outcome.horizon,
+          targetDate: outcome.targetDate,
+          observedDate: outcome.observedDate,
+          observedPrice: outcome.observedPrice,
+          returnPct: outcome.returnPct,
+          alignment: outcome.alignment,
+          status: outcome.status,
+          resolvedAt: null,
+          createdAt: now,
+        };
+        localStore.opinionOutcomes.push(stored);
+        return stored;
+      });
+      return { snapshot, outcomes };
+    }
+    throw new Error("Database not available");
+  }
+
+  try {
+    const existing = await findOpinionSnapshot(db, normalized);
+    if (!existing) {
+      await db.insert(opinionTrackingSnapshots).values(normalized as InsertOpinionTrackingSnapshot);
+    }
+
+    const snapshot = existing ?? await requireOpinionSnapshot(db, normalized);
+    for (const pending of createPendingOutcomes(snapshot.id, snapshot.opinionCreatedAt)) {
+      const outcome = await findOpinionOutcome(db, snapshot.id, pending.horizon);
+      if (!outcome) {
+        await db.insert(opinionTrackingOutcomes).values({
+          snapshotId: snapshot.id,
+          horizon: pending.horizon,
+          targetDate: pending.targetDate,
+          observedDate: pending.observedDate,
+          observedPrice: pending.observedPrice,
+          returnPct: pending.returnPct,
+          alignment: pending.alignment,
+          status: pending.status,
+          resolvedAt: null,
+        } as InsertOpinionTrackingOutcome);
+      }
+    }
+
+    const outcomes = await getOpinionOutcomes(db, snapshot.id);
+    return { snapshot, outcomes };
+  } catch (error) {
+    if (useLocalFallback("create opinion tracking snapshot failed", error)) {
+      return createOpinionSnapshotWithPendingOutcomes(normalized);
+    }
+    throw error;
+  }
+}
+
+export async function listRecentOpinionTracking(
+  symbol: string,
+  limit = 1200,
+  since?: Date
+): Promise<OpinionTrackingRecord[]> {
+  const db = await getDb();
+  const normalizedSymbol = symbol.toUpperCase();
+  if (!db) {
+    if (useLocalFallback("database not available")) {
+      return localStore.opinionSnapshots
+        .filter(snapshot => snapshot.symbol === normalizedSymbol)
+        .filter(snapshot => !since || snapshot.opinionCreatedAt.getTime() >= since.getTime())
+        .sort((a, b) => b.opinionCreatedAt.getTime() - a.opinionCreatedAt.getTime())
+        .slice(0, limit)
+        .map(snapshot => ({
+          snapshot,
+          outcomes: localStore.opinionOutcomes.filter(outcome => outcome.snapshotId === snapshot.id),
+        }));
+    }
+    return [];
+  }
+
+  try {
+    const snapshots = await db
+      .select()
+      .from(opinionTrackingSnapshots)
+      .where(
+        since
+          ? and(
+              eq(opinionTrackingSnapshots.symbol, normalizedSymbol),
+              gte(opinionTrackingSnapshots.opinionCreatedAt, since)
+            )
+          : eq(opinionTrackingSnapshots.symbol, normalizedSymbol)
+      )
+      .orderBy(desc(opinionTrackingSnapshots.opinionCreatedAt))
+      .limit(limit);
+
+    const records: OpinionTrackingRecord[] = [];
+    for (const snapshot of snapshots) {
+      records.push({
+        snapshot,
+        outcomes: await getOpinionOutcomes(db, snapshot.id),
+      });
+    }
+    return records;
+  } catch (error) {
+    if (useLocalFallback("list opinion tracking failed", error)) {
+      return listRecentOpinionTracking(normalizedSymbol, limit, since);
+    }
+    throw error;
+  }
+}
+
+export async function updateOpinionOutcome(input: OpinionTrackingOutcomeUpdate) {
+  const db = await getDb();
+  const resolvedAt = input.resolvedAt ?? (input.status === "resolved" ? new Date() : null);
+
+  if (!db) {
+    if (useLocalFallback("database not available")) {
+      const existing = localStore.opinionOutcomes.find(
+        outcome => outcome.snapshotId === input.snapshotId && outcome.horizon === input.horizon
+      );
+      if (!existing) return undefined;
+      if (existing.status === "resolved") return existing;
+      Object.assign(existing, {
+        status: input.status,
+        observedDate: input.observedDate,
+        observedPrice: input.observedPrice,
+        returnPct: input.returnPct,
+        alignment: input.alignment,
+        resolvedAt,
+      });
+      return existing;
+    }
+    return undefined;
+  }
+
+  try {
+    const existing = await findOpinionOutcome(db, input.snapshotId, input.horizon);
+    if (!existing) return undefined;
+    if (existing.status === "resolved") return existing;
+
+    await db
+      .update(opinionTrackingOutcomes)
+      .set({
+        status: input.status,
+        observedDate: input.observedDate,
+        observedPrice: input.observedPrice,
+        returnPct: input.returnPct,
+        alignment: input.alignment,
+        resolvedAt,
+      })
+      .where(
+        and(
+          eq(opinionTrackingOutcomes.snapshotId, input.snapshotId),
+          eq(opinionTrackingOutcomes.horizon, input.horizon)
+        )
+      );
+
+    return findOpinionOutcome(db, input.snapshotId, input.horizon);
+  } catch (error) {
+    if (useLocalFallback("update opinion outcome failed", error)) {
+      return updateOpinionOutcome(input);
+    }
+    throw error;
+  }
+}
+
+function normalizeTrackingInput(input: OpinionTrackingSnapshotInput) {
+  return {
+    ...input,
+    symbol: input.symbol.toUpperCase(),
+  };
+}
+
+function findLocalOpinionSnapshot(input: OpinionTrackingSnapshotInput) {
+  return localStore.opinionSnapshots.find(snapshot =>
+    snapshot.symbol === input.symbol.toUpperCase() &&
+    snapshot.opinionVersion === input.opinionVersion &&
+    snapshot.opinionCreatedAt.getTime() === input.opinionCreatedAt.getTime()
+  );
+}
+
+async function findOpinionSnapshot(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  input: OpinionTrackingSnapshotInput
+) {
+  const result = await db
+    .select()
+    .from(opinionTrackingSnapshots)
+    .where(
+      and(
+        eq(opinionTrackingSnapshots.symbol, input.symbol.toUpperCase()),
+        eq(opinionTrackingSnapshots.opinionVersion, input.opinionVersion),
+        eq(opinionTrackingSnapshots.opinionCreatedAt, input.opinionCreatedAt)
+      )
+    )
+    .limit(1);
+  return result[0];
+}
+
+async function requireOpinionSnapshot(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  input: OpinionTrackingSnapshotInput
+) {
+  const snapshot = await findOpinionSnapshot(db, input);
+  if (!snapshot) throw new Error("Opinion tracking snapshot was not created");
+  return snapshot;
+}
+
+async function findOpinionOutcome(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  snapshotId: number,
+  horizon: OpinionTrackingHorizon
+) {
+  const result = await db
+    .select()
+    .from(opinionTrackingOutcomes)
+    .where(
+      and(
+        eq(opinionTrackingOutcomes.snapshotId, snapshotId),
+        eq(opinionTrackingOutcomes.horizon, horizon)
+      )
+    )
+    .limit(1);
+  return result[0];
+}
+
+async function getOpinionOutcomes(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, snapshotId: number) {
+  return db
+    .select()
+    .from(opinionTrackingOutcomes)
+    .where(eq(opinionTrackingOutcomes.snapshotId, snapshotId));
 }

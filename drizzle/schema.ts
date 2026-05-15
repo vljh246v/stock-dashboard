@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, bigint } from "drizzle-orm/mysql-core";
+import { double, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar, json, bigint } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -48,3 +48,47 @@ export const stockAnalysisCache = mysqlTable("stock_analysis_cache", {
 
 export type StockAnalysisCache = typeof stockAnalysisCache.$inferSelect;
 export type InsertStockAnalysisCache = typeof stockAnalysisCache.$inferInsert;
+
+/**
+ * Opinion Tracking - immutable AI opinion snapshots used for historical alignment evidence.
+ */
+export const opinionTrackingSnapshots = mysqlTable("opinion_tracking_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  symbol: varchar("symbol", { length: 20 }).notNull(),
+  opinionCreatedAt: timestamp("opinionCreatedAt").notNull(),
+  opinionVersion: varchar("opinionVersion", { length: 80 }).notNull(),
+  finalSignal: varchar("finalSignal", { length: 20 }).notNull(),
+  finalConfidence: varchar("finalConfidence", { length: 20 }).notNull(),
+  startObservedDate: timestamp("startObservedDate"),
+  startPrice: double("startPrice"),
+  opinionPayload: json("opinionPayload"),
+  sourceSummary: json("sourceSummary"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("opinion_tracking_snapshot_unique").on(
+    table.symbol,
+    table.opinionVersion,
+    table.opinionCreatedAt
+  ),
+]);
+
+export const opinionTrackingOutcomes = mysqlTable("opinion_tracking_outcomes", {
+  id: int("id").autoincrement().primaryKey(),
+  snapshotId: int("snapshotId").notNull(),
+  horizon: varchar("horizon", { length: 10 }).notNull(),
+  targetDate: timestamp("targetDate").notNull(),
+  observedDate: timestamp("observedDate"),
+  observedPrice: double("observedPrice"),
+  returnPct: double("returnPct"),
+  alignment: varchar("alignment", { length: 30 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("opinion_tracking_outcome_unique").on(table.snapshotId, table.horizon),
+]);
+
+export type OpinionTrackingSnapshot = typeof opinionTrackingSnapshots.$inferSelect;
+export type InsertOpinionTrackingSnapshot = typeof opinionTrackingSnapshots.$inferInsert;
+export type OpinionTrackingOutcome = typeof opinionTrackingOutcomes.$inferSelect;
+export type InsertOpinionTrackingOutcome = typeof opinionTrackingOutcomes.$inferInsert;
