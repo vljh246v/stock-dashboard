@@ -9,6 +9,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { translateFinancialTerm } from "@shared/financialTerms";
+import {
+  isTrustedQualitySectorComparison,
+  type QualitySectorKey,
+} from "@shared/qualitySectorComparison";
 import { formatReportDate } from "@shared/reportDates";
 import { Star, Lightbulb, Leaf, Users, TrendingUp, DollarSign } from "lucide-react";
 
@@ -51,6 +55,7 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
   const recommendation = insights?.recommendation || {};
   const companySnapshot = insights?.companySnapshot?.company || {};
   const sectorSnapshot = insights?.companySnapshot?.sector || {};
+  const hasTrustedSectorComparison = isTrustedQualitySectorComparison(sectorSnapshot);
 
   const getRatingColor = (rating: string) => {
     const r = rating?.toLowerCase();
@@ -74,7 +79,9 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
     label,
     icon,
     score: toScore(companySnapshot[key]),
-    sectorScore: toScore(sectorSnapshot[key]),
+    sectorScore: hasTrustedSectorComparison
+      ? toScore(sectorSnapshot[key as QualitySectorKey])
+      : null,
   }));
 
   const hasQualityData = qualityScores.some(s => s.score !== null);
@@ -147,10 +154,12 @@ export default function FinancialValuation({ insights, isLoading }: Props) {
                 <span className="w-3 h-1 bg-primary rounded inline-block" />
                 기업
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-1 bg-muted-foreground/40 rounded inline-block" />
-                섹터 평균
-              </span>
+              {hasTrustedSectorComparison && (
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-1 bg-muted-foreground/40 rounded inline-block" />
+                  섹터 평균
+                </span>
+              )}
             </div>
           </div>
         </CardHeader>

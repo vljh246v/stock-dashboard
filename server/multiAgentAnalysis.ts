@@ -3,9 +3,10 @@ import { generateAnalysisPack, type AnalysisPack } from "./analysisPack";
 import { createOpinionSnapshotWithPendingOutcomes, getCachedData, setCachedData } from "./db";
 import { OPINION_TRACKING_VERSION, selectOpinionBaselineClose } from "./opinionTracking";
 import { translateFinancialTerm, translateFinancialText } from "@shared/financialTerms";
+import { isTrustedQualitySectorComparison } from "@shared/qualitySectorComparison";
 
 const CACHE_TTL_OPINION = 120; // 2 hours
-const CACHE_VERSION = "_v10_guidance_evidence";
+const CACHE_VERSION = "_v11_quality_sector_trust";
 
 type Signal = "매수" | "보유" | "매도";
 type Confidence = "높음" | "중간" | "낮음";
@@ -228,6 +229,12 @@ function formattedScore(value: unknown): string {
   const score = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
   const rounded = Number(score.toFixed(1));
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}점`;
+}
+
+function qualitySectorPromptLine(sectorSnapshot: unknown): string | null {
+  if (!isTrustedQualitySectorComparison(sectorSnapshot)) return null;
+  const sector = sectorSnapshot as Record<string, unknown>;
+  return `- 섹터 평균: 혁신 ${formattedScore(sector.innovativeness)}, 채용 ${formattedScore(sector.hiring)}, 지속가능성 ${formattedScore(sector.sustainability)}, 내부자 심리 ${formattedScore(sector.insiderSentiments)}`;
 }
 
 function localizeAgentResult(agent: AgentResult): AgentResult {
@@ -665,6 +672,7 @@ async function runFundamentalAgent(symbol: string, data: UnwrappedData): Promise
   const valuation = localizedTerm(data.valuation?.description);
   const relativeValue = localizedTerm(data.valuation?.relativeValue);
   const rating = localizedTerm(data.recommendation?.rating);
+  const sectorPromptLine = qualitySectorPromptLine(data.sectorSnapshot);
   const prompt = `TradingAgents의 Analyst Team 중 펀더멘털 분석가 역할입니다.
 절대 사실을 지어내지 말고 제공 데이터만 사용하세요.
 
@@ -672,8 +680,7 @@ async function runFundamentalAgent(symbol: string, data: UnwrappedData): Promise
 - 밸류에이션: ${valuation}, 할인율: ${data.valuation?.discount || "N/A"}, 상대가치: ${relativeValue}
 - 애널리스트 추천: ${rating}, 목표가 ${data.recommendation?.targetPrice || "N/A"}, 애널리스트 수 ${data.recommendation?.numberOfAnalysts || "N/A"}
 - 현재가: ${data.currentPrice ?? "N/A"}
-- 기업 품질: 혁신 ${formattedScore(data.companySnapshot?.innovativeness)}, 채용 ${formattedScore(data.companySnapshot?.hiring)}, 지속가능성 ${formattedScore(data.companySnapshot?.sustainability)}, 내부자 심리 ${formattedScore(data.companySnapshot?.insiderSentiments)}
-- 섹터 평균: 혁신 ${formattedScore(data.sectorSnapshot?.innovativeness)}, 채용 ${formattedScore(data.sectorSnapshot?.hiring)}, 지속가능성 ${formattedScore(data.sectorSnapshot?.sustainability)}, 내부자 심리 ${formattedScore(data.sectorSnapshot?.insiderSentiments)}`;
+- 기업 품질: 혁신 ${formattedScore(data.companySnapshot?.innovativeness)}, 채용 ${formattedScore(data.companySnapshot?.hiring)}, 지속가능성 ${formattedScore(data.companySnapshot?.sustainability)}, 내부자 심리 ${formattedScore(data.companySnapshot?.insiderSentiments)}${sectorPromptLine ? `\n${sectorPromptLine}` : ""}`;
 
   return runAgent(
     "펀더멘털 분석",

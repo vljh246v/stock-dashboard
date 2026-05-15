@@ -157,10 +157,10 @@ describe("generateMultiAgentOpinion fallback", () => {
   it("uses a cache key that does not reuse old agent-error opinion cache", async () => {
     await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
 
-    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v10_guidance_evidence");
+    expect(db.getCachedData).toHaveBeenCalledWith("AAPL", "llm_multi_opinion_v11_quality_sector_trust");
     expect(db.setCachedData).toHaveBeenCalledWith(
       "AAPL",
-      "llm_multi_opinion_v10_guidance_evidence",
+      "llm_multi_opinion_v11_quality_sector_trust",
       expect.any(Object),
       120
     );
@@ -313,6 +313,17 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
     expect(JSON.stringify(result.researchReport)).toContain("혁신 80점");
     expect(JSON.stringify(result.researchReport)).not.toMatch(/\d+\.\d{4,}/);
     expect(JSON.stringify(result.researchReport)).not.toMatch(/\b(Bullish|Neutral|Overvalued|Buy)\b/);
+  });
+
+  it("does not pass untrusted neutral sector quality values as confirmed sector averages", async () => {
+    await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
+
+    const fundamentalPrompt = vi.mocked(invokeLLM).mock.calls[1]?.[0].messages[1].content;
+
+    expect(fundamentalPrompt).toContain("기업 품질: 혁신 80점");
+    expect(fundamentalPrompt).toContain("채용 70점");
+    expect(fundamentalPrompt).not.toContain("섹터 평균");
+    expect(fundamentalPrompt).not.toMatch(/섹터 평균:.*50점/);
   });
 
   it("passes verified guidance evidence and anti-invention rules to the portfolio manager", async () => {
