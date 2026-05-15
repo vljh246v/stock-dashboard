@@ -136,7 +136,7 @@ jobs:
             exit 1
           fi
           mkdir -p release
-          cp -R dist drizzle package.json pnpm-lock.yaml patches release/
+          cp -R dist drizzle package.json pnpm-lock.yaml pnpm-workspace.yaml patches release/
           {
             echo "NODE_ENV=production"
             echo "DATABASE_URL=$DATABASE_URL"
