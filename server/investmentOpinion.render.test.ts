@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import InvestmentOpinion from "../client/src/components/sections/InvestmentOpinion";
+import InvestmentOpinion, { displayWorkflowStage } from "../client/src/components/sections/InvestmentOpinion";
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
@@ -31,7 +31,10 @@ describe("InvestmentOpinion labels", () => {
             keyFactors: ["추가 확인 필요"],
             dissent: "",
           },
-          workflow: { source: "TradingAgents-style research report", stages: [] },
+          workflow: {
+            source: "TradingAgents-style research report",
+            stages: ["Analyst Team", "Research Debate", "Trader", "Risk Management", "Portfolio Manager"],
+          },
           disclaimer: "투자 조언이 아닙니다.",
         },
       }),
@@ -40,9 +43,25 @@ describe("InvestmentOpinion labels", () => {
     expect(html).toContain("판단: 보유");
     expect(html).toContain("신뢰도: 낮음");
     expect(html).toContain("핵심 투자 요인");
+    expect(html).toContain("판단에 반영한 항목");
     expect(html).toContain("세부 분석");
+    expect(html).toContain("1개 분석 반영");
     expect(html).not.toContain("판단: 매도");
     expect(html).not.toContain("신뢰도: 중간");
+    expect(html).not.toContain("TradingAgents");
+    expect(html).not.toContain("Analyst Team");
+    expect(html).not.toContain("Research Debate");
+    expect(html).not.toContain("Portfolio Manager");
+    expect(html).not.toContain("관점 종합");
+    expect(html).not.toContain("검토한 관점");
+  });
+
+  it("localizes internal workflow stage names for UI display", () => {
+    expect(displayWorkflowStage("Analyst Team")).toBe("가격·재무·뉴스");
+    expect(displayWorkflowStage("Research Debate")).toBe("상승·하락 요인");
+    expect(displayWorkflowStage("Trader")).toBe("매매 시나리오");
+    expect(displayWorkflowStage("Risk Management")).toBe("리스크 점검");
+    expect(displayWorkflowStage("Portfolio Manager")).toBe("최종 판단");
   });
 
   it("labels legacy single-agent signal and confidence values", () => {

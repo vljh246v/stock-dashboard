@@ -91,6 +91,17 @@ const displaySignal = (signal: string | undefined) => `판단: ${signal || "N/A"
 
 const displayConfidence = (confidence: string | undefined) => `신뢰도: ${confidence || "N/A"}`;
 
+const workflowStageLabels: Record<string, string> = {
+  "Analyst Team": "가격·재무·뉴스",
+  "Research Debate": "상승·하락 요인",
+  Trader: "매매 시나리오",
+  "Risk Management": "리스크 점검",
+  "Portfolio Manager": "최종 판단",
+};
+
+export const displayWorkflowStage = (stage: string | undefined) =>
+  stage ? workflowStageLabels[stage] ?? stage : "";
+
 const getAgentIcon = (agentName: string) => {
   if (agentName.includes("기술")) return <LineChart className="h-4 w-4" />;
   if (agentName.includes("펀더멘털")) return <BarChart3 className="h-4 w-4" />;
@@ -171,7 +182,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
             <Users className="h-4 w-4 text-primary" />
             종합 투자 판단
             <Badge variant="secondary" className="text-[10px] ml-auto">
-              {agents.length}개 관점 종합
+              {agents.length}개 분석 반영
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -217,12 +228,12 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
       <Accordion type="multiple" className="rounded-md border border-border px-4">
         {workflowStages.length > 0 && (
           <AccordionItem value="workflow">
-            <AccordionTrigger>분석 과정</AccordionTrigger>
+            <AccordionTrigger>판단에 반영한 항목</AccordionTrigger>
             <AccordionContent>
               <div className="flex flex-wrap gap-2">
                 {workflowStages.map((stage, idx) => (
                   <Badge key={`${stage}-${idx}`} variant="secondary" className="text-xs">
-                    {idx + 1}. {stage}
+                    {idx + 1}. {displayWorkflowStage(stage)}
                   </Badge>
                 ))}
               </div>
@@ -238,12 +249,12 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-stock-up">
                     <TrendingUp className="h-4 w-4" />
-                    강세 관점
+                    상승 요인
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {displayText(finalVerdict.bullCase, "강세 관점 데이터가 제한적입니다. 가격 흐름과 기업 데이터를 함께 확인하세요.")}
+                    {displayText(finalVerdict.bullCase, "상승 근거 데이터가 제한적입니다. 가격 흐름과 기업 데이터를 함께 확인하세요.")}
                   </p>
                 </CardContent>
               </Card>
@@ -252,12 +263,12 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-stock-down">
                     <TrendingDown className="h-4 w-4" />
-                    약세 관점
+                    하락 요인
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {displayText(finalVerdict.bearCase, "약세 관점 데이터가 제한적입니다. 밸류에이션과 하방 리스크를 보수적으로 확인하세요.")}
+                    {displayText(finalVerdict.bearCase, "하락 리스크 데이터가 제한적입니다. 밸류에이션과 하방 리스크를 보수적으로 확인하세요.")}
                   </p>
                 </CardContent>
               </Card>
@@ -343,7 +354,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
                         <span className="block">{agent.agentName}</span>
                         {agent.stage && (
                           <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
-                            {agent.stage}
+                            {displayWorkflowStage(agent.stage)}
                           </span>
                         )}
                       </span>
@@ -378,18 +389,18 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
 
         {finalVerdict.dissent && (
           <AccordionItem value="dissent">
-            <AccordionTrigger>다른 관점</AccordionTrigger>
+            <AccordionTrigger>반대 논리</AccordionTrigger>
             <AccordionContent>
               <Card className="bg-card border-border border-l-2 border-l-amber-500/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-400">
                     <AlertTriangle className="h-4 w-4" />
-                    다른 관점
+                    반대 논리
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {displayText(finalVerdict.dissent, "관점별 데이터가 제한적이어서 반대 논거를 추가 확인해야 합니다.")}
+                    {displayText(finalVerdict.dissent, "판단이 엇갈리는 데이터가 제한적이어서 반대 논거를 추가 확인해야 합니다.")}
                   </p>
                 </CardContent>
               </Card>
@@ -448,7 +459,7 @@ function LegacyOpinion({ opinion }: { opinion: any }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-stock-up">
               <TrendingUp className="h-4 w-4" />
-              강세 관점
+              상승 요인
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -461,7 +472,7 @@ function LegacyOpinion({ opinion }: { opinion: any }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-stock-down">
               <TrendingDown className="h-4 w-4" />
-              약세 관점
+              하락 요인
             </CardTitle>
           </CardHeader>
           <CardContent>
