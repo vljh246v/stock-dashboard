@@ -7,7 +7,7 @@ import CoreMetricsSection from "../client/src/components/sections/CoreMetricsSec
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 describe("CoreMetricsSection rendering", () => {
-  it("renders verified values, unavailable states, and source context", () => {
+  it("renders verified values, unavailable states, and compact verification status", () => {
     const html = renderToString(
       React.createElement(CoreMetricsSection, {
         isLoading: false,
@@ -60,10 +60,13 @@ describe("CoreMetricsSection rendering", () => {
     expect(html).toContain("핵심 지표");
     expect(html).toContain("PER");
     expect(html).toContain("28.4배");
-    expect(html).toContain("Yahoo quoteSummary.defaultKeyStatistics");
-    expect(html).toContain("trailingPE");
+    expect(html).toContain("출처 확인");
+    expect(html).not.toContain("Yahoo quoteSummary.defaultKeyStatistics");
+    expect(html).not.toContain("trailingPE");
+    expect(html).not.toContain("응답 확인 시각입니다.");
     expect(html).toContain("확인 불가");
-    expect(html).toContain("구조화된 값이 없어 확인할 수 없습니다.");
+    expect(html).toContain("값 없음");
+    expect(html).not.toContain("구조화된 값이 없어 확인할 수 없습니다.");
   });
 
   it("keeps metric descriptions inside the help overlay instead of the row body", () => {

@@ -79,9 +79,18 @@ function MetricHelpPopover({ metric }: { metric: FinancialMetric }) {
               {freshnessLabel(metric.freshness)}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              {metric.unavailableDetailKo}
-            </p>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>
+                {reasonLabel(metric.unavailableReason)} ·{" "}
+                {metric.unavailableDetailKo}
+              </p>
+              {metric.expectedSource && (
+                <p>
+                  기대 출처: {metric.expectedSource.name} ·{" "}
+                  {metric.expectedSource.basis}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </PopoverContent>
@@ -121,25 +130,13 @@ function MetricRow({ metric }: { metric: FinancialMetric }) {
         )}
       </div>
 
-      <div className="min-w-0 text-xs leading-relaxed text-muted-foreground">
+      <div className="min-w-0 text-xs leading-relaxed text-muted-foreground sm:text-right">
         {isAvailable ? (
-          <>
-            <p className="truncate">{metric.source.name}</p>
-            <p className="truncate">
-              {metric.source.basis} · {freshnessLabel(metric.freshness)}
-            </p>
-          </>
+          <Badge variant="outline" className="text-emerald-600">
+            출처 확인
+          </Badge>
         ) : (
-          <>
-            <p>{reasonLabel(metric.unavailableReason)}</p>
-            <p>{metric.unavailableDetailKo}</p>
-            {metric.expectedSource && (
-              <p className="truncate">
-                기대 출처: {metric.expectedSource.name} ·{" "}
-                {metric.expectedSource.basis}
-              </p>
-            )}
-          </>
+          <p>{reasonLabel(metric.unavailableReason)}</p>
         )}
       </div>
     </div>
@@ -232,7 +229,8 @@ export default function CoreMetricsSection({
           </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          출처, 계산 기준, 최신성까지 확인되는 숫자만 값으로 표시합니다.
+          행에는 값과 검증 상태만 간결히 표시합니다. 설명, 원천 API, 필드,
+          확인시각은 각 지표의 ?에서 확인할 수 있습니다.
         </p>
       </CardHeader>
       <CardContent>
