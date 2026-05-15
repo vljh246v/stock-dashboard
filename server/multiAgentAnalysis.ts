@@ -446,7 +446,7 @@ function buildBullFallback(analysts: AgentResult[]): AgentResult {
     confidence: bullish.length >= 2 ? "높음" : bullish.length === 1 ? "중간" : "낮음",
     reasoning: bullish.length > 0
       ? `강세 리서처는 ${bullish.map(agent => agent.agentName).join(", ")}의 긍정 신호를 근거로 제한적 상승 여지를 봅니다.`
-      : "강한 매수 논거가 제한적이어서 방어적인 강세 의견에 머뭅니다.",
+      : "강한 매수 논거가 제한적이어서 신중한 강세 판단에 머뭅니다.",
     keyPoints: bullish.flatMap(agent => agent.keyPoints).slice(0, 3).length > 0
       ? bullish.flatMap(agent => agent.keyPoints).slice(0, 3)
       : ["강세 근거 제한"],
@@ -494,8 +494,8 @@ function buildTraderFallback(
     reasoning: "트레이더는 리서치 토론 결과를 실행 관점으로 바꾸되, 하방 리스크가 남아 있으면 포지션을 보수적으로 제한합니다.",
     keyPoints: [
       `종합 점수: ${totalScore}`,
-      `강세 의견: ${bull.signal}`,
-      `약세 의견: ${bear.signal}`,
+      `강세 판단: ${bull.signal}`,
+      `약세 판단: ${bear.signal}`,
     ],
   };
 }
@@ -533,7 +533,7 @@ function buildFinalFallback(agents: AgentResult[]): FinalVerdict {
   return localizeFinalVerdict({
     signal,
     confidence: new Set(agents.map(agent => agent.signal)).size <= 2 ? "중간" : "낮음",
-    summary: "공개 데이터 기반의 보수적 종합 의견입니다. TradingAgents식 흐름으로 분석팀, 강세/약세 리서처, 트레이더, 리스크 관리자의 의견을 차례로 반영했습니다.",
+    summary: "공개 데이터 기반의 신중한 종합 의견입니다. 가격, 재무, 뉴스, 리스크 관점을 차례로 반영했습니다.",
     bullCase: bullish.length > 0
       ? bullish.map(agent => `${agent.agentName}: ${agent.reasoning}`).join(" ")
       : "강한 매수 근거는 제한적이므로 추가 데이터 확인이 필요합니다.",
@@ -621,8 +621,8 @@ function buildResearchReport(symbol: string, pack: AnalysisPack, agents: AgentRe
         ],
       },
       {
-        title: "에이전트 근거",
-        bullets: topAgentPoints.length > 0 ? topAgentPoints : ["에이전트 근거 데이터 부족"],
+        title: "세부 근거",
+        bullets: topAgentPoints.length > 0 ? topAgentPoints : ["세부 근거 데이터 부족"],
       },
     ],
     dataQuality: pack.sources.map(source => `${source.name}: ${sourceStatusLabel(source.status)}`),
@@ -913,7 +913,7 @@ export async function generateMultiAgentOpinion(
     },
     finalVerdict,
     researchReport,
-    disclaimer: "본 분석은 AI가 공개 데이터를 기반으로 생성한 참고 정보이며, 실제 투자 결정의 근거로 사용해서는 안 됩니다. 투자에 따른 손실은 전적으로 투자자 본인에게 있습니다.",
+    disclaimer: "본 분석은 공개 데이터를 바탕으로 자동 생성한 참고 정보이며, 실제 투자 결정의 근거로 사용해서는 안 됩니다. 투자에 따른 손실은 전적으로 투자자 본인에게 있습니다.",
   };
 
   await recordOpinionSnapshot(symbol, opinionCreatedAt, chartData, opinion, analysisPack);

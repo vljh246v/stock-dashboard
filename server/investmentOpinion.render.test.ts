@@ -37,11 +37,11 @@ describe("InvestmentOpinion labels", () => {
       }),
     );
 
-    expect(html).toContain("의견: 보유");
+    expect(html).toContain("판단: 보유");
     expect(html).toContain("신뢰도: 낮음");
     expect(html).toContain("핵심 투자 요인");
-    expect(html).toContain("에이전트별 상세");
-    expect(html).not.toContain("의견: 매도");
+    expect(html).toContain("세부 분석");
+    expect(html).not.toContain("판단: 매도");
     expect(html).not.toContain("신뢰도: 중간");
   });
 
@@ -60,7 +60,7 @@ describe("InvestmentOpinion labels", () => {
       }),
     );
 
-    expect(html).toContain("의견: 매수");
+    expect(html).toContain("판단: 매수");
     expect(html).toContain("신뢰도: 높음");
   });
 });

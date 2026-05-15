@@ -234,7 +234,7 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
       .mockResolvedValueOnce(llmJson({
         signal: "보유",
         confidence: "중간",
-        summary: "TradingAgents식 분석팀, 리서처, 트레이더, 리스크 검토를 종합하면 보유가 적절합니다.",
+        summary: "가격, 재무, 뉴스, 리스크 검토를 종합하면 보유가 적절합니다.",
         bullCase: "기술 흐름과 제품 뉴스는 긍정적입니다.",
         bearCase: "고평가와 손절선 이탈 리스크가 있습니다.",
         keyFactors: ["기술 추세", "밸류에이션", "리스크 한도"],
@@ -293,12 +293,12 @@ describe("generateMultiAgentOpinion TradingAgents-style workflow", () => {
       source: "TradingAgents-style research report",
       stages: ["Analyst Team", "Research Debate", "Trader", "Risk Management", "Portfolio Manager"],
     });
-    expect(result.finalVerdict.summary).toContain("TradingAgents식");
+    expect(result.finalVerdict.summary).toContain("가격");
     expect(result.finalVerdict.dissent).toContain("강세 리서처");
     expect(invokeLLM).toHaveBeenCalledTimes(8);
   });
 
-  it("returns a TradingAgents-style research report backed by shared analysis data", async () => {
+  it("returns a research report backed by shared analysis data", async () => {
     const result = await generateMultiAgentOpinion("AAPL", profileData, insightsData, null, chartData);
 
     expect(result.workflow.source).toBe("TradingAgents-style research report");

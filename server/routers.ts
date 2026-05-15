@@ -200,9 +200,9 @@ async function buildOpinionTracking(symbol: string) {
     symbol,
     rows,
     copy: {
-      title: "의견 추적",
-      description: "과거 AI 의견 방향과 이후 가격 흐름의 역사적 일치 여부를 수집합니다.",
-      empty: "아직 충분한 1개월/3개월 기록을 수집 중입니다.",
+      title: "판단 기록",
+      description: "이전에 남긴 판단과 이후 가격 변화를 함께 보여줍니다.",
+      empty: "아직 비교할 1개월/3개월 뒤 가격 데이터가 충분하지 않습니다.",
     },
   };
 }

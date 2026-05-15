@@ -14,8 +14,8 @@ describe("StockDashboard current UI contract", () => {
       "차트",
       "재무/가이던스",
       "ETF 정보",
-      "분석 의견",
-      "근거/추적",
+      "투자 판단",
+      "근거",
       "뉴스",
     ]) {
       expect(stockDashboardSource).toMatch(
@@ -30,6 +30,8 @@ describe("StockDashboard current UI contract", () => {
       "가이던스",
       "공시",
       "의견 추적",
+      "분석 의견",
+      "근거/추적",
       "기업 개요",
       "기술적 분석",
       "재무/밸류에이션",

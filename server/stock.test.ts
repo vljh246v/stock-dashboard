@@ -390,7 +390,7 @@ describe("stock.opinionTracking", () => {
     const result = await caller.stock.opinionTracking({ symbol: "apple" });
 
     expect(result.symbol).toBe("AAPL");
-    expect(result.copy.description).toContain("역사적 일치");
+    expect(result.copy.description).toContain("이후 가격 변화");
     expect(mockListRecentOpinionTracking).toHaveBeenCalledWith("AAPL", 1200, expect.any(Date));
     expect(mockGetStockChart).not.toHaveBeenCalledWith("AAPL", "1d", "6mo");
   });

@@ -87,7 +87,7 @@ const getConfidenceColor = (confidence: string) => {
   return "text-muted-foreground";
 };
 
-const displaySignal = (signal: string | undefined) => `의견: ${signal || "N/A"}`;
+const displaySignal = (signal: string | undefined) => `판단: ${signal || "N/A"}`;
 
 const displayConfidence = (confidence: string | undefined) => `신뢰도: ${confidence || "N/A"}`;
 
@@ -169,9 +169,9 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
-            종합 투자 의견
+            종합 투자 판단
             <Badge variant="secondary" className="text-[10px] ml-auto">
-              {agents.length}개 에이전트 종합
+              {agents.length}개 관점 종합
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -217,7 +217,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
       <Accordion type="multiple" className="rounded-md border border-border px-4">
         {workflowStages.length > 0 && (
           <AccordionItem value="workflow">
-            <AccordionTrigger>TradingAgents 흐름</AccordionTrigger>
+            <AccordionTrigger>분석 과정</AccordionTrigger>
             <AccordionContent>
               <div className="flex flex-wrap gap-2">
                 {workflowStages.map((stage, idx) => (
@@ -231,7 +231,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
         )}
 
         <AccordionItem value="bull-bear">
-          <AccordionTrigger>강세/약세 관점</AccordionTrigger>
+          <AccordionTrigger>상승/하락 요인</AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Card className="bg-card border-border border-l-2 border-l-[oklch(0.7_0.18_150)]">
@@ -267,16 +267,16 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
 
         {researchReport && (
           <AccordionItem value="research-report">
-            <AccordionTrigger>리서치 보고서</AccordionTrigger>
+              <AccordionTrigger>상세 리포트</AccordionTrigger>
             <AccordionContent>
               <Card className="bg-card border-border">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-primary" />
-                    리서치 보고서
+                    상세 리포트
                     {workflow?.source && (
                       <Badge variant="outline" className="text-[10px] ml-auto">
-                        {workflow.source}
+                        종합 리포트
                       </Badge>
                     )}
                   </CardTitle>
@@ -331,7 +331,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
         )}
 
         <AccordionItem value="agent-details">
-          <AccordionTrigger>에이전트별 상세</AccordionTrigger>
+          <AccordionTrigger>세부 분석</AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {agents.map((agent, idx) => (
@@ -359,7 +359,7 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      {displayText(agent.reasoning, `${agent.agentName} 데이터가 제한적이어서 보수적으로 판단했습니다.`)}
+                      {displayText(agent.reasoning, `${agent.agentName} 데이터가 제한적이어서 신중하게 판단했습니다.`)}
                     </p>
                     <div className="space-y-1">
                       {displayKeyPoints(agent.keyPoints, "공개 데이터 기준으로 추가 확인 필요").map((point, pidx) => (
@@ -378,13 +378,13 @@ export default function InvestmentOpinion({ opinion, isLoading }: Props) {
 
         {finalVerdict.dissent && (
           <AccordionItem value="dissent">
-            <AccordionTrigger>반대 의견</AccordionTrigger>
+            <AccordionTrigger>다른 관점</AccordionTrigger>
             <AccordionContent>
               <Card className="bg-card border-border border-l-2 border-l-amber-500/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-400">
                     <AlertTriangle className="h-4 w-4" />
-                    반대 의견
+                    다른 관점
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -419,7 +419,7 @@ function LegacyOpinion({ opinion }: { opinion: any }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Brain className="h-4 w-4 text-primary" />
-            종합 투자 의견
+            종합 투자 판단
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

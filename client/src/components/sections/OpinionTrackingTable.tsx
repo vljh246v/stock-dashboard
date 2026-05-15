@@ -82,10 +82,10 @@ export default function OpinionTrackingTable({ tracking, isLoading }: Props) {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <History className="h-4 w-4 text-primary" />
-          {tracking?.copy?.title || "의견 추적"}
+          {tracking?.copy?.title || "판단 기록"}
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          {tracking?.copy?.description || "과거 AI 의견 방향과 이후 가격 흐름의 역사적 일치 여부를 수집합니다."}
+          {tracking?.copy?.description || "이전에 남긴 판단과 이후 가격 변화를 함께 보여줍니다."}
         </p>
       </CardHeader>
       <CardContent>
@@ -93,7 +93,7 @@ export default function OpinionTrackingTable({ tracking, isLoading }: Props) {
           <div className="text-sm text-muted-foreground">기록을 불러오고 있습니다.</div>
         ) : rows.length === 0 ? (
           <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-            {tracking?.copy?.empty || "아직 충분한 1개월/3개월 기록을 수집 중입니다."}
+            {tracking?.copy?.empty || "아직 비교할 1개월/3개월 뒤 가격 데이터가 충분하지 않습니다."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -101,11 +101,11 @@ export default function OpinionTrackingTable({ tracking, isLoading }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead>분석일</TableHead>
-                  <TableHead>당시 의견</TableHead>
+                  <TableHead>당시 판단</TableHead>
                   <TableHead>당시 가격</TableHead>
-                  <TableHead>1개월 후 흐름</TableHead>
-                  <TableHead>3개월 후 흐름</TableHead>
-                  <TableHead>상태</TableHead>
+                  <TableHead>1개월 뒤</TableHead>
+                  <TableHead>3개월 뒤</TableHead>
+                  <TableHead>확인 상태</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

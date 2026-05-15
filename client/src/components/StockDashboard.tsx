@@ -57,7 +57,7 @@ function EvidenceSummaryCard({
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Database className="h-4 w-4 text-primary" />
-            출처 검증 요약
+            자료 출처
           </div>
           <p className="truncate text-xs text-muted-foreground">
             {activeSources.length > 0
@@ -77,7 +77,7 @@ function EvidenceSummaryCard({
           className="shrink-0"
           onClick={onOpenEvidence}
         >
-          근거/추적 보기
+          근거 보기
         </Button>
       </CardContent>
     </Card>
@@ -101,10 +101,10 @@ function EvidenceOverview({
         <CardContent className="p-4">
           <div className="mb-1 flex items-center gap-2 text-sm font-medium">
             <History className="h-4 w-4 text-primary" />
-            의견 추적
+            판단 기록
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            과거 의견과 1개월/3개월 이후 흐름을 보수적으로 비교합니다.
+            이전 판단과 1개월/3개월 뒤 가격 변화를 함께 보여줍니다.
           </p>
         </CardContent>
       </Card>
@@ -116,8 +116,8 @@ function EvidenceOverview({
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {hasFilings
-              ? "SEC 공시와 주요 이벤트를 같은 신뢰 흐름에서 확인합니다."
-              : "개별 기업 공시가 없는 자산은 출처 요약 중심으로 확인합니다."}
+              ? "SEC 공시와 주요 이벤트를 한곳에서 확인합니다."
+              : "개별 기업 공시가 없는 자산은 자료 출처 중심으로 확인합니다."}
           </p>
         </CardContent>
       </Card>
@@ -125,7 +125,7 @@ function EvidenceOverview({
         <CardContent className="p-4">
           <div className="mb-1 flex items-center gap-2 text-sm font-medium">
             <Database className="h-4 w-4 text-primary" />
-            출처 검증 요약
+            자료 출처
           </div>
           <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {activeSources.length > 0
@@ -292,10 +292,10 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
             </TabsTrigger>
           )}
           <TabsTrigger value="opinion" className="text-xs">
-            분석 의견
+            투자 판단
           </TabsTrigger>
           <TabsTrigger value="evidence" className="text-xs">
-            근거/추적
+            근거
           </TabsTrigger>
           <TabsTrigger value="sentiment" className="text-xs">
             뉴스
