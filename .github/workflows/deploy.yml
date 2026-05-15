@@ -177,6 +177,7 @@ jobs:
              corepack pnpm install --prod --frozen-lockfile --prefer-offline && \
              node dist/migrate.js && \
              ln -sfn '$OCI_DEPLOY_DIR/releases/$GITHUB_SHA' '$OCI_DEPLOY_DIR/current' && \
+             if command -v getenforce >/dev/null 2>&1 && [ \"\$(getenforce)\" != \"Disabled\" ]; then sudo chcon -R -t usr_t '$OCI_DEPLOY_DIR'; fi && \
              sudo cp stock-dashboard.service /etc/systemd/system/stock-dashboard.service && \
              sudo systemctl daemon-reload && \
              sudo systemctl enable stock-dashboard && \
