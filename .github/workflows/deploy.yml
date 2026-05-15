@@ -1,0 +1,210 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  ci:
+    name: Test, typecheck, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: corepack pnpm test
+
+      - name: Run typecheck
+        run: corepack pnpm check
+
+      - name: Build app
+        run: corepack pnpm build
+
+  deploy:
+    name: Deploy to OCI VM
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build app
+        run: corepack pnpm build
+
+      - name: Resolve deployment settings
+        env:
+          OCI_SSH_HOST: ${{ secrets.OCI_SSH_HOST }}
+          OCI_SSH_USER: ${{ secrets.OCI_SSH_USER }}
+          OCI_SSH_PORT: ${{ secrets.OCI_SSH_PORT }}
+          OCI_DEPLOY_DIR: ${{ secrets.OCI_DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          if [ -z "$OCI_SSH_HOST" ]; then
+            echo "OCI_SSH_HOST secret is required" >&2
+            exit 1
+          fi
+          echo "OCI_SSH_USER=${OCI_SSH_USER:-opc}" >> "$GITHUB_ENV"
+          echo "OCI_SSH_PORT=${OCI_SSH_PORT:-22}" >> "$GITHUB_ENV"
+          echo "OCI_DEPLOY_DIR=${OCI_DEPLOY_DIR:-/home/opc/stock-dashboard}" >> "$GITHUB_ENV"
+          echo "OCI_SSH_HOST=$OCI_SSH_HOST" >> "$GITHUB_ENV"
+
+      - name: Configure SSH
+        env:
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$OCI_SSH_PRIVATE_KEY" ]; then
+            echo "OCI_SSH_PRIVATE_KEY secret is required" >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > ~/.ssh/oci_deploy_key
+          chmod 600 ~/.ssh/oci_deploy_key
+          ssh-keyscan -p "$OCI_SSH_PORT" -H "$OCI_SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare release files
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          OWNER_OPEN_ID: ${{ secrets.OWNER_OPEN_ID }}
+          PORT: ${{ secrets.PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is required" >&2
+            exit 1
+          fi
+          if [ -z "$JWT_SECRET" ]; then
+            echo "JWT_SECRET secret is required" >&2
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY secret is required" >&2
+            exit 1
+          fi
+          if [ -n "${PORT:-}" ] && [ "$PORT" != "3000" ]; then
+            echo "PORT must be unset or exactly 3000 for the first OCI deployment" >&2
+            exit 1
+          fi
+          mkdir -p release
+          cp -R dist drizzle package.json pnpm-lock.yaml patches release/
+          {
+            echo "NODE_ENV=production"
+            echo "DATABASE_URL=$DATABASE_URL"
+            echo "JWT_SECRET=$JWT_SECRET"
+            echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+            echo "OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}"
+            if [ -n "${OWNER_OPEN_ID:-}" ]; then
+              echo "OWNER_OPEN_ID=$OWNER_OPEN_ID"
+            fi
+            echo "PORT=3000"
+          } > release/.env
+          sed \
+            -e "s|__DEPLOY_DIR__|$OCI_DEPLOY_DIR|g" \
+            -e "s|__DEPLOY_USER__|$OCI_SSH_USER|g" \
+            deploy/stock-dashboard.service > release/stock-dashboard.service
+          tar -czf stock-dashboard-release.tar.gz -C release .
+          chmod 600 stock-dashboard-release.tar.gz
+
+      - name: Upload deployment files
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oci_deploy_key -p "$OCI_SSH_PORT" "$OCI_SSH_USER@$OCI_SSH_HOST" \
+            "mkdir -p '$OCI_DEPLOY_DIR/releases/$GITHUB_SHA' '$OCI_DEPLOY_DIR/shared'"
+          scp -i ~/.ssh/oci_deploy_key -P "$OCI_SSH_PORT" \
+            stock-dashboard-release.tar.gz \
+            "$OCI_SSH_USER@$OCI_SSH_HOST:$OCI_DEPLOY_DIR/releases/$GITHUB_SHA/release.tar.gz"
+
+      - name: Install release and restart app
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oci_deploy_key -p "$OCI_SSH_PORT" "$OCI_SSH_USER@$OCI_SSH_HOST" \
+            "set -euo pipefail && \
+             cd '$OCI_DEPLOY_DIR/releases/$GITHUB_SHA' && \
+             tar -xzf release.tar.gz && \
+             rm release.tar.gz && \
+             corepack enable && \
+             corepack pnpm config set store-dir '$OCI_DEPLOY_DIR/shared/pnpm-store' && \
+             corepack pnpm install --prod --frozen-lockfile --prefer-offline && \
+             node dist/migrate.js && \
+             ln -sfn '$OCI_DEPLOY_DIR/releases/$GITHUB_SHA' '$OCI_DEPLOY_DIR/current' && \
+             sudo cp stock-dashboard.service /etc/systemd/system/stock-dashboard.service && \
+             sudo systemctl daemon-reload && \
+             sudo systemctl enable stock-dashboard && \
+             sudo systemctl restart stock-dashboard && \
+             find '$OCI_DEPLOY_DIR/releases' -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +6 | xargs -r rm -rf"
+
+      - name: Verify deployment
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oci_deploy_key -p "$OCI_SSH_PORT" "$OCI_SSH_USER@$OCI_SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          print_diagnostics() {
+            sudo systemctl status stock-dashboard --no-pager || true
+            sudo journalctl -u stock-dashboard -n 120 --no-pager || true
+          }
+
+          if ! sudo systemctl is-active --quiet stock-dashboard; then
+            echo "stock-dashboard systemd service is not active" >&2
+            print_diagnostics
+            exit 1
+          fi
+
+          if ! curl --fail --show-error --silent --location http://127.0.0.1:3000/login >/tmp/stock-dashboard-login.html; then
+            echo "stock-dashboard did not serve /login on 127.0.0.1:3000" >&2
+            print_diagnostics
+            exit 1
+          fi
+          REMOTE
+
+          if ! curl --fail --show-error --silent --location \
+            --retry 5 --retry-delay 2 --retry-connrefused \
+            "http://$OCI_SSH_HOST:3000/login" >/tmp/stock-dashboard-login.html; then
+            echo "stock-dashboard did not serve /login on http://$OCI_SSH_HOST:3000" >&2
+            ssh -i ~/.ssh/oci_deploy_key -p "$OCI_SSH_PORT" "$OCI_SSH_USER@$OCI_SSH_HOST" \
+              "sudo systemctl status stock-dashboard --no-pager || true; sudo journalctl -u stock-dashboard -n 120 --no-pager || true"
+            exit 1
+          fi

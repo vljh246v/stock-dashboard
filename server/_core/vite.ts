@@ -3,10 +3,13 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
+  const vitePackage = "vite";
+  const viteConfigPath = "../../vite.config";
+  const [{ createServer: createViteServer }, { default: viteConfig }] =
+    await Promise.all([import(vitePackage), import(viteConfigPath)]);
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -18,6 +21,18 @@ export async function setupVite(app: Express, server: Server) {
     configFile: false,
     server: serverOptions,
     appType: "custom",
+  });
+
+  app.use((req, res, next) => {
+    if (!req.path.startsWith("/api/")) {
+      res.set({
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
+    }
+    next();
   });
 
   app.use(vite.middlewares);
@@ -39,7 +54,16 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      res
+        .status(200)
+        .set({
+          "Content-Type": "text/html",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        })
+        .end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -58,10 +82,24 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(
+    express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache, must-revalidate");
+          return;
+        }
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      },
+    })
+  );
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.set({
+      "Cache-Control": "no-cache, must-revalidate",
+      Pragma: "no-cache",
+    });
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

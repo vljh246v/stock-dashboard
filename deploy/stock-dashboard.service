@@ -1,0 +1,19 @@
+[Unit]
+Description=Stock Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+WorkingDirectory=__DEPLOY_DIR__/current
+Environment=NODE_ENV=production
+EnvironmentFile=-__DEPLOY_DIR__/current/.env
+ExecStart=/usr/bin/env node dist/index.js
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+SyslogIdentifier=stock-dashboard
+
+[Install]
+WantedBy=multi-user.target
