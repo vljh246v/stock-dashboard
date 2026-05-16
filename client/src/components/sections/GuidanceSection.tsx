@@ -137,7 +137,7 @@ export default function GuidanceSection({
               확인해 주세요.
             </p>
             {hasTechnicalData && (
-              <div className="grid grid-cols-3 gap-3 pt-2">
+              <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3">
                 {[
                   {
                     label: "단기 전망",
@@ -172,7 +172,7 @@ export default function GuidanceSection({
               </div>
             )}
             {(keyTechnicals.support || keyTechnicals.stopLoss) && (
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                 {keyTechnicals.support && (
                   <div className="p-3 rounded-md bg-secondary/40">
                     <p className="text-xs text-muted-foreground">지지선</p>
@@ -204,7 +204,7 @@ export default function GuidanceSection({
         <Card className="bg-card border-border">
           <CardContent className="p-4 flex items-center gap-3">
             <Target className="h-5 w-5 text-primary" />
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">목표 주가</p>
               <p className="text-lg font-mono font-semibold">
                 {targetPrice != null ? `$${targetPrice.toFixed(2)}` : "N/A"}
@@ -226,7 +226,7 @@ export default function GuidanceSection({
         <Card className="bg-card border-border">
           <CardContent className="p-4 flex items-center gap-3">
             <BarChart3 className="h-5 w-5 text-chart-3" />
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">밸류에이션 상태</p>
               <p className="text-sm font-semibold">
                 {translateFinancialTerm(valuation.description)}
@@ -243,7 +243,7 @@ export default function GuidanceSection({
         <Card className="bg-card border-border">
           <CardContent className="p-4 flex items-center gap-3">
             <FileText className="h-5 w-5 text-chart-1" />
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">투자 의견</p>
               <p className="text-sm font-semibold">
                 {translateFinancialTerm(recommendation.rating)}
@@ -351,7 +351,11 @@ export default function GuidanceSection({
 
       {/* Morningstar 강세/약세 분석 */}
       {(bullPoints.length > 0 || bearPoints.length > 0) && (
-        <Accordion type="single" collapsible className="rounded-md border border-border px-4">
+        <Accordion
+          type="single"
+          collapsible
+          className="rounded-md border border-border px-4"
+        >
           <AccordionItem value="morningstar-details">
             <AccordionTrigger>강세/약세 리포트 상세</AccordionTrigger>
             <AccordionContent>
@@ -426,7 +430,7 @@ export default function GuidanceSection({
 
       {/* Source Info */}
       {(publishDate || upsell.upsellReportType) && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>
             출처:{" "}
             {upsell.upsellReportType === "MORNINGSTAR_ANALYST"

@@ -2,7 +2,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import InvestmentOpinion, { displayWorkflowStage } from "../client/src/components/sections/InvestmentOpinion";
+import InvestmentOpinion, {
+  displayWorkflowStage,
+} from "../client/src/components/sections/InvestmentOpinion";
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
@@ -28,21 +30,33 @@ describe("InvestmentOpinion labels", () => {
             summary: "근거가 제한적입니다.",
             bullCase: "강세 근거 제한",
             bearCase: "약세 근거 확인 필요",
-            keyFactors: ["추가 확인 필요"],
+            keyFactors: [
+              "긴 핵심 요인은 모바일에서 배지 안에서 줄바꿈되어야 합니다",
+            ],
             dissent: "",
           },
           workflow: {
             source: "TradingAgents-style research report",
-            stages: ["Analyst Team", "Research Debate", "Trader", "Risk Management", "Portfolio Manager"],
+            stages: [
+              "Analyst Team",
+              "Research Debate",
+              "Trader",
+              "Risk Management",
+              "Portfolio Manager",
+            ],
           },
           disclaimer: "투자 조언이 아닙니다.",
         },
-      }),
+      })
     );
 
     expect(html).toContain("판단: 보유");
     expect(html).toContain("신뢰도: 낮음");
     expect(html).toContain("핵심 투자 요인");
+    expect(html).toContain("max-w-full whitespace-normal");
+    expect(html).toContain(
+      "긴 핵심 요인은 모바일에서 배지 안에서 줄바꿈되어야 합니다"
+    );
     expect(html).toContain("판단에 반영한 항목");
     expect(html).toContain("세부 분석");
     expect(html).toContain("1개 분석 반영");
@@ -76,7 +90,7 @@ describe("InvestmentOpinion labels", () => {
           bearCase: "약세 근거",
           keyFactors: [],
         },
-      }),
+      })
     );
 
     expect(html).toContain("판단: 매수");

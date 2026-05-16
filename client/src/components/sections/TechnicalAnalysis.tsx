@@ -3,8 +3,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { reportDateSortKey } from "@shared/reportDates";
-import { TrendingUp, TrendingDown, Minus, Target, CandlestickChart, LineChart as LineChartIcon } from "lucide-react";
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Bar, BarChart, Cell, ComposedChart, Line } from "recharts";
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Target,
+  CandlestickChart,
+  LineChart as LineChartIcon,
+} from "lucide-react";
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  Cell,
+  ComposedChart,
+  Line,
+} from "recharts";
 import { useState, useMemo } from "react";
 
 interface Props {
@@ -14,7 +34,12 @@ interface Props {
   isETF?: boolean;
 }
 
-export default function TechnicalAnalysis({ insights, chartData, isLoading, isETF: isETFProp }: Props) {
+export default function TechnicalAnalysis({
+  insights,
+  chartData,
+  isLoading,
+  isETF: isETFProp,
+}: Props) {
   const [chartType, setChartType] = useState<"line" | "candle">("line");
 
   const priceData = useMemo(() => {
@@ -22,22 +47,29 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
     const timestamps = chartResult?.timestamp || [];
     const quotes = chartResult?.indicators?.quote?.[0] || {};
 
-    return timestamps.map((ts: number, i: number) => ({
-      date: new Date(ts * 1000).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }),
-      open: quotes.open?.[i] ? Number(quotes.open[i].toFixed(2)) : null,
-      close: quotes.close?.[i] ? Number(quotes.close[i].toFixed(2)) : null,
-      high: quotes.high?.[i] ? Number(quotes.high[i].toFixed(2)) : null,
-      low: quotes.low?.[i] ? Number(quotes.low[i].toFixed(2)) : null,
-      volume: quotes.volume?.[i] || 0,
-    })).filter((d: any) => d.close !== null);
+    return timestamps
+      .map((ts: number, i: number) => ({
+        date: new Date(ts * 1000).toLocaleDateString("ko-KR", {
+          month: "short",
+          day: "numeric",
+        }),
+        open: quotes.open?.[i] ? Number(quotes.open[i].toFixed(2)) : null,
+        close: quotes.close?.[i] ? Number(quotes.close[i].toFixed(2)) : null,
+        high: quotes.high?.[i] ? Number(quotes.high[i].toFixed(2)) : null,
+        low: quotes.low?.[i] ? Number(quotes.low[i].toFixed(2)) : null,
+        volume: quotes.volume?.[i] || 0,
+      }))
+      .filter((d: any) => d.close !== null);
   }, [chartData]);
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-64 w-full" />
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
         </div>
       </div>
     );
@@ -49,19 +81,31 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
   const meta = chartData?.chart?.result?.[0]?.meta || {};
 
   // ETF 판별: prop 우선, fallback으로 insights 기반
-  const isETF = isETFProp ?? (!insights?.recommendation && !insights?.upsell && !(insights?.reports?.length));
+  const isETF =
+    isETFProp ??
+    (!insights?.recommendation &&
+      !insights?.upsell &&
+      !insights?.reports?.length);
 
   // recommendation.targetPrice가 없을 경우 reports[]에서 최신 목표가 fallback
   const reports = insights?.reports || [];
   const latestReportWithTarget = reports
     .filter((r: any) => r.targetPrice != null)
-    .sort((a: any, b: any) => reportDateSortKey(b.reportDate).localeCompare(reportDateSortKey(a.reportDate)))[0];
-  const targetPrice: number | null = recommendation.targetPrice ?? latestReportWithTarget?.targetPrice ?? null;
-  const targetPriceProvider: string = recommendation.provider || latestReportWithTarget?.provider || "";
+    .sort((a: any, b: any) =>
+      reportDateSortKey(b.reportDate).localeCompare(
+        reportDateSortKey(a.reportDate)
+      )
+    )[0];
+  const targetPrice: number | null =
+    recommendation.targetPrice ?? latestReportWithTarget?.targetPrice ?? null;
+  const targetPriceProvider: string =
+    recommendation.provider || latestReportWithTarget?.provider || "";
 
   const getDirectionIcon = (direction: string) => {
-    if (direction === "Bullish" || direction === "bullish") return <TrendingUp className="h-4 w-4 text-stock-up" />;
-    if (direction === "Bearish" || direction === "bearish") return <TrendingDown className="h-4 w-4 text-stock-down" />;
+    if (direction === "Bullish" || direction === "bullish")
+      return <TrendingUp className="h-4 w-4 text-stock-up" />;
+    if (direction === "Bearish" || direction === "bearish")
+      return <TrendingDown className="h-4 w-4 text-stock-down" />;
     return <Minus className="h-4 w-4 text-muted-foreground" />;
   };
 
@@ -72,8 +116,10 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
   };
 
   const getDirectionColor = (direction: string) => {
-    if (direction === "Bullish" || direction === "bullish") return "bg-stock-up text-stock-up";
-    if (direction === "Bearish" || direction === "bearish") return "bg-stock-down text-stock-down";
+    if (direction === "Bullish" || direction === "bullish")
+      return "bg-stock-up text-stock-up";
+    if (direction === "Bearish" || direction === "bearish")
+      return "bg-stock-down text-stock-down";
     return "bg-muted text-muted-foreground";
   };
 
@@ -82,9 +128,11 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
       {/* Price Chart */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">6개월 주가 흐름</CardTitle>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <CardTitle className="text-sm font-semibold">
+              6개월 주가 흐름
+            </CardTitle>
+            <div className="flex flex-col gap-2 sm:items-end">
               <div className="flex items-center gap-1 bg-secondary rounded-md p-0.5">
                 <Button
                   variant={chartType === "line" ? "default" : "ghost"}
@@ -92,8 +140,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                   className="h-6 px-2 text-xs"
                   onClick={() => setChartType("line")}
                 >
-                  <LineChartIcon className="h-3 w-3 mr-1" />
-                  선
+                  <LineChartIcon className="h-3 w-3 mr-1" />선
                 </Button>
                 <Button
                   variant={chartType === "candle" ? "default" : "ghost"}
@@ -105,10 +152,16 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                   캔들
                 </Button>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>현재 ${meta.regularMarketPrice?.toFixed(2) || "N/A"}</span>
-                <span>52주 고점 ${meta.fiftyTwoWeekHigh?.toFixed(2) || "N/A"}</span>
-                <span>52주 저점 ${meta.fiftyTwoWeekLow?.toFixed(2) || "N/A"}</span>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground sm:justify-end">
+                <span>
+                  현재 ${meta.regularMarketPrice?.toFixed(2) || "N/A"}
+                </span>
+                <span>
+                  52주 고점 ${meta.fiftyTwoWeekHigh?.toFixed(2) || "N/A"}
+                </span>
+                <span>
+                  52주 저점 ${meta.fiftyTwoWeekLow?.toFixed(2) || "N/A"}
+                </span>
               </div>
             </div>
           </div>
@@ -117,14 +170,28 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
           {priceData.length > 0 ? (
             chartType === "line" ? (
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={priceData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                <AreaChart
+                  data={priceData}
+                  margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
+                >
                   <defs>
                     <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="oklch(0.65 0.18 250)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="oklch(0.65 0.18 250)" stopOpacity={0} />
+                      <stop
+                        offset="5%"
+                        stopColor="oklch(0.65 0.18 250)"
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="oklch(0.65 0.18 250)"
+                        stopOpacity={0}
+                      />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 260)" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(0.28 0.01 260)"
+                  />
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 10, fill: "oklch(0.65 0.015 260)" }}
@@ -136,7 +203,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                     tick={{ fontSize: 10, fill: "oklch(0.65 0.015 260)" }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={v => `$${v}`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -159,8 +226,14 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
               </ResponsiveContainer>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={priceData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 260)" />
+                <ComposedChart
+                  data={priceData}
+                  margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(0.28 0.01 260)"
+                  />
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 10, fill: "oklch(0.65 0.015 260)" }}
@@ -172,7 +245,7 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                     tick={{ fontSize: 10, fill: "oklch(0.65 0.015 260)" }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={v => `$${v}`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -190,7 +263,16 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                         <div className="bg-popover border border-border rounded-md p-2 text-xs">
                           <p className="font-medium mb-1">{d.date}</p>
                           <p>시가: ${d.open}</p>
-                          <p>종가: <span className={isUp ? "text-stock-up" : "text-stock-down"}>${d.close}</span></p>
+                          <p>
+                            종가:{" "}
+                            <span
+                              className={
+                                isUp ? "text-stock-up" : "text-stock-down"
+                              }
+                            >
+                              ${d.close}
+                            </span>
+                          </p>
                           <p>고가: ${d.high}</p>
                           <p>저가: ${d.low}</p>
                         </div>
@@ -204,11 +286,36 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
                     return null; // Handled below
                   })}
                   {/* High-Low line */}
-                  <Line type="monotone" dataKey="high" stroke="oklch(0.5 0.01 260)" strokeWidth={1} dot={false} />
-                  <Line type="monotone" dataKey="low" stroke="oklch(0.5 0.01 260)" strokeWidth={1} dot={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="high"
+                    stroke="oklch(0.5 0.01 260)"
+                    strokeWidth={1}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="low"
+                    stroke="oklch(0.5 0.01 260)"
+                    strokeWidth={1}
+                    dot={false}
+                  />
                   {/* Close line colored by direction */}
-                  <Line type="monotone" dataKey="close" stroke="oklch(0.65 0.18 250)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="open" stroke="oklch(0.6 0.1 30)" strokeWidth={1} dot={false} strokeDasharray="3 3" />
+                  <Line
+                    type="monotone"
+                    dataKey="close"
+                    stroke="oklch(0.65 0.18 250)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="open"
+                    stroke="oklch(0.6 0.1 30)"
+                    strokeWidth={1}
+                    dot={false}
+                    strokeDasharray="3 3"
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
             )
@@ -253,12 +360,18 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
             <div>
               <p className="text-xs text-muted-foreground">지지선</p>
               {keyTechnicals.support != null ? (
-                <p className="text-lg font-mono font-semibold">${keyTechnicals.support.toFixed(2)}</p>
+                <p className="text-lg font-mono font-semibold">
+                  ${keyTechnicals.support.toFixed(2)}
+                </p>
               ) : (
-                <p className="text-sm text-muted-foreground italic">데이터 없음</p>
+                <p className="text-sm text-muted-foreground italic">
+                  데이터 없음
+                </p>
               )}
               {keyTechnicals.provider && (
-                <p className="text-xs text-muted-foreground">{keyTechnicals.provider}</p>
+                <p className="text-xs text-muted-foreground">
+                  {keyTechnicals.provider}
+                </p>
               )}
             </div>
           </CardContent>
@@ -269,10 +382,14 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
             <div>
               <p className="text-xs text-muted-foreground">손절 기준</p>
               <p className="text-lg font-mono font-semibold">
-                {keyTechnicals.stopLoss != null ? `$${keyTechnicals.stopLoss.toFixed(2)}` : "N/A"}
+                {keyTechnicals.stopLoss != null
+                  ? `$${keyTechnicals.stopLoss.toFixed(2)}`
+                  : "N/A"}
               </p>
               {keyTechnicals.provider && (
-                <p className="text-xs text-muted-foreground">{keyTechnicals.provider}</p>
+                <p className="text-xs text-muted-foreground">
+                  {keyTechnicals.provider}
+                </p>
               )}
             </div>
           </CardContent>
@@ -283,14 +400,18 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
             <div>
               <p className="text-xs text-muted-foreground">목표가</p>
               {isETF ? (
-                <p className="text-sm text-muted-foreground italic">ETF는 해당 없음</p>
+                <p className="text-sm text-muted-foreground italic">
+                  ETF는 해당 없음
+                </p>
               ) : (
                 <>
                   <p className="text-lg font-mono font-semibold">
                     {targetPrice != null ? `$${targetPrice.toFixed(2)}` : "N/A"}
                   </p>
                   {targetPriceProvider && (
-                    <p className="text-xs text-muted-foreground">{targetPriceProvider}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {targetPriceProvider}
+                    </p>
                   )}
                 </>
               )}
@@ -302,7 +423,13 @@ export default function TechnicalAnalysis({ insights, chartData, isLoading, isET
   );
 }
 
-function OutlookCard({ title, outlook, getDirectionIcon, getDirectionLabel, getDirectionColor }: any) {
+function OutlookCard({
+  title,
+  outlook,
+  getDirectionIcon,
+  getDirectionLabel,
+  getDirectionColor,
+}: any) {
   const direction = outlook?.direction || "Neutral";
   return (
     <Card className="bg-card border-border">
@@ -316,11 +443,15 @@ function OutlookCard({ title, outlook, getDirectionIcon, getDirectionLabel, getD
             {getDirectionLabel(direction)}
           </Badge>
           {outlook?.score !== undefined && (
-            <span className="text-xs text-muted-foreground">점수: {outlook.score}</span>
+            <span className="text-xs text-muted-foreground">
+              점수: {outlook.score}
+            </span>
           )}
         </div>
         {outlook?.stateDescription && (
-          <p className="text-xs text-muted-foreground">{outlook.stateDescription}</p>
+          <p className="text-xs text-muted-foreground">
+            {outlook.stateDescription}
+          </p>
         )}
       </CardContent>
     </Card>
