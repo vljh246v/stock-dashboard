@@ -184,16 +184,16 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-5 p-4 sm:p-6 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+        <div className="min-w-0">
+          <h1 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold tracking-tight">
             <span className="font-mono">{symbol}</span>
             {(profileData?.price?.shortName ||
               chartMeta?.shortName ||
               chartMeta?.longName) && (
-              <span className="ml-3 text-base font-normal text-muted-foreground">
+              <span className="min-w-0 text-base font-normal text-muted-foreground">
                 {profileData?.price?.shortName ||
                   chartMeta?.shortName ||
                   chartMeta?.longName}
@@ -217,29 +217,50 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="bg-secondary border border-border w-full justify-start overflow-x-auto flex-nowrap">
-          <TabsTrigger value="core" className="text-xs">
+        <TabsList className="bg-secondary border border-border h-auto w-full justify-start gap-1 overflow-x-auto flex-nowrap rounded-md p-1 [scrollbar-width:none] md:h-9 md:gap-0 md:p-[3px] [&::-webkit-scrollbar]:hidden">
+          <TabsTrigger
+            value="core"
+            className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+          >
             핵심
           </TabsTrigger>
-          <TabsTrigger value="technical" className="text-xs">
+          <TabsTrigger
+            value="technical"
+            className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+          >
             차트
           </TabsTrigger>
           {isETF ? (
-            <TabsTrigger value="etf" className="text-xs">
+            <TabsTrigger
+              value="etf"
+              className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+            >
               ETF 정보
             </TabsTrigger>
           ) : (
-            <TabsTrigger value="financial-guidance" className="text-xs">
+            <TabsTrigger
+              value="financial-guidance"
+              className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+            >
               재무/가이던스
             </TabsTrigger>
           )}
-          <TabsTrigger value="opinion" className="text-xs">
+          <TabsTrigger
+            value="opinion"
+            className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+          >
             투자 판단
           </TabsTrigger>
-          <TabsTrigger value="evidence" className="text-xs">
+          <TabsTrigger
+            value="evidence"
+            className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+          >
             근거
           </TabsTrigger>
-          <TabsTrigger value="sentiment" className="text-xs">
+          <TabsTrigger
+            value="sentiment"
+            className="min-h-10 shrink-0 px-3 text-xs md:min-h-0 md:px-2"
+          >
             뉴스
           </TabsTrigger>
         </TabsList>
@@ -257,7 +278,11 @@ export default function StockDashboard({ symbol }: StockDashboardProps) {
             sources={analysisPackQuery.data?.pack.sources}
             onOpenEvidence={() => setActiveTab("evidence")}
           />
-          <Accordion type="single" collapsible className="rounded-md border border-border px-4">
+          <Accordion
+            type="single"
+            collapsible
+            className="rounded-md border border-border px-4"
+          >
             <AccordionItem value="overview">
               <AccordionTrigger>회사/자산 개요</AccordionTrigger>
               <AccordionContent>

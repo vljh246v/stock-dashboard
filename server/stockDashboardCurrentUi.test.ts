@@ -15,9 +15,7 @@ const decisionSummarySource = readFileSync(
 );
 
 function tabContentSource(value: string, nextValue: string) {
-  const start = stockDashboardSource.indexOf(
-    `<TabsContent value="${value}"`
-  );
+  const start = stockDashboardSource.indexOf(`<TabsContent value="${value}"`);
   const end = stockDashboardSource.indexOf(
     `<TabsContent value="${nextValue}"`,
     start + 1
@@ -64,7 +62,7 @@ describe("StockDashboard current UI contract", () => {
       );
     }
 
-    expect(stockDashboardSource).toContain('value={activeTab}');
+    expect(stockDashboardSource).toContain("value={activeTab}");
     expect(stockDashboardSource).toContain("DecisionSummaryCard");
     expect(stockDashboardSource).toContain("EvidenceTabOverview");
   });
@@ -88,5 +86,13 @@ describe("StockDashboard current UI contract", () => {
     expect(stockDashboardSource).not.toContain("근거 보기");
     expect(decisionSummarySource).toContain("자료 상태:");
     expect(decisionSummarySource).not.toContain("근거:");
+  });
+
+  it("keeps the dashboard tabs mobile-friendly while restoring desktop tab behavior", () => {
+    expect(stockDashboardSource).toContain("overflow-x-auto");
+    expect(stockDashboardSource).toContain("min-h-10");
+    expect(stockDashboardSource).toContain("md:h-9");
+    expect(stockDashboardSource).toContain("md:p-[3px]");
+    expect(stockDashboardSource).not.toContain("bottom-0");
   });
 });
